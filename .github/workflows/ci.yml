@@ -6,8 +6,7 @@ on:
   pull_request:
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   verify:
@@ -15,49 +14,9 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.ref || github.ref }}
-          fetch-depth: 0
-      - name: Apply M1 hardening patch
-        if: github.event_name == 'pull_request'
-        run: |
-          python3 .github/scripts/apply_m1_hardening.py
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/buu-snapshot.ts tests/buu-snapshot.test.ts
-          git diff --cached --check
-          git commit -m 'fix: enforce M1 reconciliation reference integrity'
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci --ignore-scripts
-      - name: Verify
-        id: verify
-        shell: bash
-        run: |
-          set +e
-          npm run verify 2>&1 | tee verify.log
-          status=${PIPESTATUS[0]}
-          {
-            echo '## Verification output'
-            echo '```text'
-            cat verify.log
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-          exit "$status"
-      - name: Publish failure diagnostics
-        if: failure() && github.event_name == 'pull_request'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          {
-            echo '<!-- ci-verification-diagnostics -->'
-            echo '### CI verification failure'
-            echo '```text'
-            tail -n 120 verify.log
-            echo '```'
-          } > verify-comment.md
-          gh pr comment "$PR_NUMBER" --body-file verify-comment.md
+      - run: npm run verify
