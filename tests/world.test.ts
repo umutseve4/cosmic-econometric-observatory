@@ -20,11 +20,26 @@ const graph: KnowledgeGraph = { nodes, edges };
 
 test('Course, CurriculumRelation and Offering remain separate', () => {
   const course = { id: 'course:micro', kind: 'course', canonicalTitle: 'Microeconomics', codeAssignments: [{ value: 'IKT1001', validFrom: '2025-09-01' }], provenance };
+  const relation = { id: 'relation:1', kind: 'curriculum-relation', curriculumVersionId: 'curriculum:2025', courseId: 'course:micro', semester: 1, status: 'required', ects: 6, provenance };
+  const offering = { id: 'offering:1', kind: 'offering', courseId: 'course:micro', academicYear: '2025-2026', instructionType: 'primary', section: '1', provenance };
   assert.equal(validateRecord(course).accepted.length, 1);
-  assert.equal(validateRecord({ ...course, semester: 1 }).accepted.length, 0);
-  assert.equal(validateRecord({ id: 'offering:1', kind: 'offering', courseId: 'course:micro', academicYear: '2025-2026', instructionType: 'primary', section: '1', provenance }).accepted.length, 1);
-  assert.equal(validateRecord({ id: 'offering:bad', kind: 'offering', canonicalTitle: 'Microeconomics', section: '1', provenance }).accepted.length, 0);
-  assert.equal(validateRecord({ id: 'relation:1', kind: 'curriculum-relation', curriculumVersionId: 'curriculum:2025', courseId: 'course:micro', semester: 1, status: 'required', ects: 6, provenance }).accepted.length, 1);
+  assert.equal(validateRecord(relation).accepted.length, 1);
+  assert.equal(validateRecord(offering).accepted.length, 1);
+
+  for (const contaminated of [
+    { ...course, semester: 1 },
+    { ...course, ects: 6 },
+    { ...course, section: '1' },
+    { ...relation, academicYear: '2025-2026' },
+    { ...relation, section: '1' },
+    { ...offering, canonicalTitle: 'Microeconomics' },
+    { ...offering, semester: 1 }
+  ]) assert.equal(validateRecord(contaminated).accepted.length, 0);
+
+  assert.equal(validateRecord({ ...relation, status: undefined }).accepted.length, 0);
+  assert.equal(validateRecord({ ...relation, status: 'sometimes' }).accepted.length, 0);
+  assert.equal(validateRecord({ ...offering, instructionType: undefined }).accepted.length, 0);
+  assert.equal(validateRecord({ ...offering, instructionType: 'night' }).accepted.length, 0);
 });
 
 test('records without provenance are rejected rather than repaired', () => {
@@ -36,18 +51,26 @@ test('records without provenance are rejected rather than repaired', () => {
   assert.equal((result.rejected[0] as { canonicalTitle: string }).canonicalTitle, 'PYHTON UYGULAMALARI');
 });
 
-test('dangling graph references fail validation', () => {
+test('duplicate identifiers and dangling graph references fail validation', () => {
   assert.deepEqual(validateGraph(graph), []);
+  assert.deepEqual(validateGraph({ nodes: [...nodes, nodes[0]!], edges }), ['DUPLICATE_NODE_ID']);
+  assert.deepEqual(validateGraph({ nodes, edges: [...edges, edges[0]!] }), ['DUPLICATE_EDGE_ID']);
   assert.deepEqual(validateGraph({ nodes, edges: [...edges, { ...edges[0]!, id: 'edge:bad', target: 'missing' }] }), ['DANGLING_EDGE:edge:bad']);
 });
 
-test('reordered semantic input produces byte-identical Scene IR', () => {
-  const reversed: KnowledgeGraph = { nodes: [...nodes].reverse(), edges: [...edges].reverse() };
-  const first = compileScene(graph);
-  const second = compileScene(reversed);
-  assert.equal(canonicalScene(first), canonicalScene(second));
-  assert.equal(sceneHash(first), sceneHash(second));
-  for (let index = 0; index < 100; index += 1) assert.equal(sceneHash(compileScene(index % 2 ? graph : reversed)), sceneHash(first));
+test('all tested input permutations produce byte-identical Scene IR', () => {
+  const withDerivedFrom = (reverse: boolean): KnowledgeGraph => ({
+    nodes: (reverse ? [...nodes].reverse() : [...nodes]).map((node) => ({ ...node, provenance: { ...node.provenance, derivedFrom: reverse ? ['evidence:b', 'evidence:a'] : ['evidence:a', 'evidence:b'] } })),
+    edges: (reverse ? [...edges].reverse() : [...edges]).map((edge) => ({ ...edge, provenance: { ...edge.provenance, derivedFrom: reverse ? ['evidence:b', 'evidence:a'] : ['evidence:a', 'evidence:b'] } }))
+  });
+  const baseline = compileScene(withDerivedFrom(false));
+  const baselineBytes = canonicalScene(baseline);
+  const baselineHash = sceneHash(baseline);
+  for (let index = 0; index < 100; index += 1) {
+    const candidate = compileScene(withDerivedFrom(index % 2 === 0));
+    assert.equal(canonicalScene(candidate), baselineBytes);
+    assert.equal(sceneHash(candidate), baselineHash);
+  }
 });
 
 test('three, SVG and HTML projections preserve semantic parity and keyboard access', () => {

@@ -8,11 +8,13 @@ export interface GraphEdge { id: Id; kind: EdgeKind; source: Id; target: Id; pro
 export interface KnowledgeGraph { nodes: readonly GraphNode[]; edges: readonly GraphEdge[]; }
 
 export function validateGraph(graph: KnowledgeGraph): readonly string[] {
-  const ids = new Set(graph.nodes.map((node) => node.id));
+  const nodeIds = new Set(graph.nodes.map((node) => node.id));
+  const edgeIds = new Set(graph.edges.map((edge) => edge.id));
   const errors: string[] = [];
-  if (ids.size !== graph.nodes.length) errors.push('DUPLICATE_NODE_ID');
+  if (nodeIds.size !== graph.nodes.length) errors.push('DUPLICATE_NODE_ID');
+  if (edgeIds.size !== graph.edges.length) errors.push('DUPLICATE_EDGE_ID');
   for (const edge of graph.edges) {
-    if (!ids.has(edge.source) || !ids.has(edge.target)) errors.push(`DANGLING_EDGE:${edge.id}`);
+    if (!nodeIds.has(edge.source) || !nodeIds.has(edge.target)) errors.push(`DANGLING_EDGE:${edge.id}`);
   }
   return errors.sort();
 }
