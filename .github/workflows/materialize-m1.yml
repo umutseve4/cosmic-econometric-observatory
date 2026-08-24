@@ -1,0 +1,56 @@
+name: Materialize M1 evidence
+
+on:
+  push:
+    branches: [feat/m1-source-backed-buu-snapshot]
+    paths:
+      - scripts/materialize-m1.mjs
+      - .github/workflows/materialize-m1.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out successor
+        uses: actions/checkout@v4
+        with:
+          path: successor
+      - name: Check out pinned legacy evidence
+        uses: actions/checkout@v4
+        with:
+          repository: umutseve4/eko-rasathane
+          ref: db8d52f0b29d712c34e8b7487e2299ce9f75c266
+          path: legacy
+          persist-credentials: false
+      - name: Materialize twice
+        run: |
+          node successor/scripts/materialize-m1.mjs legacy "$RUNNER_TEMP/first"
+          node successor/scripts/materialize-m1.mjs legacy "$RUNNER_TEMP/second"
+          diff --recursive --brief "$RUNNER_TEMP/first" "$RUNNER_TEMP/second"
+      - name: Stage deterministic artifacts
+        run: cp -R "$RUNNER_TEMP/first/vendor" successor/vendor
+      - name: Upload evidence artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: m1-evidence
+          path: successor/vendor
+          if-no-files-found: error
+          retention-days: 30
+      - name: Persist evidence on source branch
+        working-directory: successor
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet -- vendor; then exit 0; fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add vendor
+          git commit -m "data: vendor pinned M1 BUÜ evidence"
+          git push
+        shell: bash
+    permissions:
+      contents: write
