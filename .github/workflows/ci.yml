@@ -18,4 +18,16 @@ jobs:
         with:
           node-version: 22
       - run: npm install --ignore-scripts
-      - run: npm run verify
+      - name: Verify and publish diagnostics
+        shell: bash
+        run: |
+          set +e
+          npm run verify 2>&1 | tee verify.log
+          status=${PIPESTATUS[0]}
+          {
+            echo '## Verification output'
+            echo '```text'
+            cat verify.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
