@@ -32,10 +32,12 @@ M1 pins the 2025–2026 BUÜ Economics curriculum and timetable at legacy commit
 M2a compiles the source-backed institution, Econometrics program, 2025–2026 curriculum, and its curriculum courses into versioned artifacts.
 
 - Every `144` `CurriculumRelation` record is projected exactly once with semester, status, ECTS, optional pool, and provenance.
-- `AnchorManifestV1` accepts explicit history and retains every unaffected anchor, slot, and coordinate byte-for-byte during insertion.
+- Insertion-only evolution accepts a complete previous `CurriculumCompilation`; the previous graph, `AnchorManifestV1`, and `RouteManifestV1` are hash-bound and must have exact node-set parity.
+- Retained anchors, slots, coordinates, canonical routes, and aliases remain byte-for-byte unchanged; missing or tampered history is rejected rather than regenerated.
 - `RouteManifestV1` derives canonical `/v1/nodes/{persistent-id}` URLs from stable identity; course codes are aliases only.
 - Input ordering and locale cannot alter canonical output.
-- Duplicate/dangling identities, missing provenance, silent relation drift, and tampered previous manifests are fatal.
+- Duplicate/dangling identities, malformed or mixed provenance, unknown anomaly references, silent relation drift, prior-node removal, and tampered previous state are fatal.
+- Known offering-only anomalies remain valid snapshot evidence but are excluded from the M2a curriculum graph.
 - Topics and laboratories are intentionally deferred until pinned evidence exists; renderer and deployment remain outside M2a.
 
 See [`docs/adr/0002-m2a-curriculum-graph-core.md`](docs/adr/0002-m2a-curriculum-graph-core.md) for the exact boundary.
