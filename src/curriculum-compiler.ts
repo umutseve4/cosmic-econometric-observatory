@@ -16,6 +16,7 @@ const INSTITUTION_ID = 'institution:buu';
 const PROGRAM_ID = 'program:buu:econometrics';
 const CURRICULUM_ID = 'curriculum:buu:econometrics:2025-2026';
 const MAX_SLOT = 0x0f_ffff_ffff_ffff;
+const SHA256 = /^sha256:[0-9a-f]{64}$/u;
 
 export interface CurriculumRelationProjection {
   id: string;
@@ -25,6 +26,10 @@ export interface CurriculumRelationProjection {
   poolId?: string;
 }
 
+export interface CurriculumGraphNode extends GraphNode {
+  codeAssignments?: readonly { value: string; validFrom: string; validTo?: string }[];
+}
+
 export interface CurriculumGraphEdge extends GraphEdge {
   curriculumRelation?: CurriculumRelationProjection;
 }
@@ -32,7 +37,7 @@ export interface CurriculumGraphEdge extends GraphEdge {
 export interface CurriculumGraph extends KnowledgeGraph {
   schemaVersion: '1.0.0';
   compilerVersion: typeof M2_COMPILER_VERSION;
-  nodes: readonly GraphNode[];
+  nodes: readonly CurriculumGraphNode[];
   edges: readonly CurriculumGraphEdge[];
   anomalies: readonly Anomaly[];
 }
@@ -71,21 +76,30 @@ export interface CurriculumCompilation {
   routeManifest: RouteManifestV1;
 }
 
-export function compileBuuCurriculum(snapshot: BuuSnapshot, previous?: AnchorManifestV1): CurriculumCompilation {
+export function compileBuuCurriculum(snapshot: BuuSnapshot, previous?: CurriculumCompilation): CurriculumCompilation {
   validateBuuSnapshotReferences(snapshot);
   validateCompilerInput(snapshot);
+  if (previous !== undefined) validatePreviousCompilation(previous);
 
   const relations = [...snapshot.curriculumRelations].sort((a, b) => compareCodePoints(a.id, b.id));
+  const relationCourseIds = new Set(relations.map((relation) => relation.courseId));
   const courses = [...snapshot.courses]
-    .filter((course) => relations.some((relation) => relation.courseId === course.id))
+    .filter((course) => relationCourseIds.has(course.id))
     .sort((a, b) => compareCodePoints(a.id, b.id));
+  if (courses.length !== relationCourseIds.size) throw new Error('Curriculum relation references an unavailable course');
   const derivedProvenance = compilerProvenance(relations);
 
-  const nodes: GraphNode[] = [
+  const nodes: CurriculumGraphNode[] = [
     { id: INSTITUTION_ID, kind: 'institution', label: 'Bursa Uludağ Üniversitesi', provenance: derivedProvenance },
     { id: PROGRAM_ID, kind: 'program', label: 'Ekonometri', provenance: derivedProvenance },
     { id: CURRICULUM_ID, kind: 'curriculum', label: '2025–2026 Ekonometri Müfredatı', provenance: derivedProvenance },
-    ...courses.map((course) => ({ id: course.id, kind: 'course' as const, label: course.canonicalTitle, provenance: course.provenance }))
+    ...courses.map((course): CurriculumGraphNode => ({
+      id: course.id,
+      kind: 'course',
+      label: course.canonicalTitle,
+      provenance: course.provenance,
+      codeAssignments: course.codeAssignments.map((assignment) => ({ ...assignment }))
+    }))
   ].sort(compareNodes);
 
   const edges: CurriculumGraphEdge[] = [
@@ -123,12 +137,13 @@ export function compileBuuCurriculum(snapshot: BuuSnapshot, previous?: AnchorMan
   const graphErrors = validateGraph(graph);
   if (graphErrors.length > 0) throw new Error(`Invalid curriculum graph: ${graphErrors.join(',')}`);
   validateGraphProjection(graph, relations);
+  if (previous !== undefined) assertInsertionOnlyEvolution(previous.graph, graph);
 
   const graphHash = sha256(canonicalize(graph));
   return {
     graph,
-    anchorManifest: allocateAnchors(nodes, graphHash, previous),
-    routeManifest: compileRoutes(nodes, snapshot, graphHash)
+    anchorManifest: allocateAnchors(nodes, graphHash, previous?.anchorManifest),
+    routeManifest: compileRoutes(nodes, graphHash, previous?.routeManifest)
   };
 }
 
@@ -138,12 +153,61 @@ export function canonicalCompilation(compilation: CurriculumCompilation): string
 
 function validateCompilerInput(snapshot: BuuSnapshot): void {
   if (snapshot.curriculumRelations.length === 0) throw new Error('Curriculum relation set is empty');
-  assertUnique(snapshot.courses.map((course) => course.id), 'course');
+  const courseIds = assertUnique(snapshot.courses.map((course) => course.id), 'course');
   assertUnique(snapshot.curriculumRelations.map((relation) => relation.id), 'curriculum relation');
+  const offeringIds = assertUnique(snapshot.offerings.map((offering) => offering.id), 'offering');
+  const anomalyIds = assertUnique(snapshot.anomalies.map((anomaly) => anomaly.id), 'anomaly');
+  const knownIds = new Set<string>([INSTITUTION_ID, PROGRAM_ID, CURRICULUM_ID, ...courseIds, ...offeringIds, ...anomalyIds, ...snapshot.curriculumRelations.map((relation) => relation.id)]);
+  for (const anomaly of snapshot.anomalies) {
+    if (anomaly.entityRefs.some((reference) => !knownIds.has(reference))) throw new Error(`Dangling anomaly reference: ${anomaly.id}`);
+  }
+
   const curriculumIds = new Set(snapshot.curriculumRelations.map((relation) => relation.curriculumVersionId));
   if (curriculumIds.size !== 1 || !curriculumIds.has(CURRICULUM_ID)) throw new Error('Unexpected curriculum identity');
   for (const course of snapshot.courses) assertProvenance(course.provenance, course.id);
-  for (const relation of snapshot.curriculumRelations) assertProvenance(relation.provenance, relation.id);
+  for (const relation of snapshot.curriculumRelations) {
+    assertProvenance(relation.provenance, relation.id);
+    if (!courseIds.has(relation.courseId)) throw new Error(`Dangling curriculum relation: ${relation.id}`);
+  }
+
+  const expectedSource = sourceTuple(snapshot.curriculumRelations[0]!.provenance);
+  for (const relation of snapshot.curriculumRelations) {
+    if (sourceTuple(relation.provenance) !== expectedSource) throw new Error(`Mixed curriculum source provenance: ${relation.id}`);
+  }
+}
+
+function validatePreviousCompilation(previous: CurriculumCompilation): void {
+  if (previous.graph.schemaVersion !== '1.0.0' || previous.graph.compilerVersion !== M2_COMPILER_VERSION) throw new Error('Unsupported previous graph contract');
+  const graphErrors = validateGraph(previous.graph);
+  if (graphErrors.length > 0) throw new Error(`Invalid previous graph: ${graphErrors.join(',')}`);
+  const graphHash = sha256(canonicalize(previous.graph));
+  if (previous.anchorManifest.schemaVersion !== ANCHOR_SCHEMA_VERSION || previous.anchorManifest.layoutVersion !== ANCHOR_LAYOUT_VERSION || previous.anchorManifest.compilerVersion !== M2_COMPILER_VERSION) throw new Error('Unsupported previous anchor manifest');
+  if (previous.routeManifest.schemaVersion !== ROUTE_SCHEMA_VERSION || previous.routeManifest.compilerVersion !== M2_COMPILER_VERSION) throw new Error('Unsupported previous route manifest');
+  if (previous.anchorManifest.graphHash !== graphHash || previous.routeManifest.graphHash !== graphHash) throw new Error('Previous graph/manifests hash mismatch');
+
+  const graphIds = assertUnique(previous.graph.nodes.map((node) => node.id), 'previous graph node');
+  const anchorIds = assertUnique(previous.anchorManifest.anchors.map((anchor) => anchor.nodeId), 'previous anchor node');
+  const routeIds = assertUnique(previous.routeManifest.routes.map((route) => route.nodeId), 'previous route node');
+  assertSameSet(graphIds, anchorIds, 'Previous graph/anchor node-set mismatch');
+  assertSameSet(graphIds, routeIds, 'Previous graph/route node-set mismatch');
+
+  const nodeById = new Map(previous.graph.nodes.map((node) => [node.id, node]));
+  const occupied = new Set<number>();
+  for (const anchor of previous.anchorManifest.anchors) {
+    const node = nodeById.get(anchor.nodeId)!;
+    if (anchor.anchorId !== anchorId(anchor.nodeId) || !Number.isSafeInteger(anchor.slot) || anchor.slot < 0 || anchor.slot > MAX_SLOT || occupied.has(anchor.slot)) throw new Error(`Invalid previous anchor: ${anchor.nodeId}`);
+    occupied.add(anchor.slot);
+    if (canonicalize(anchor.position) !== canonicalize(positionFor(node.kind, anchor.slot))) throw new Error(`Previous anchor coordinate drift: ${anchor.nodeId}`);
+  }
+  for (const route of previous.routeManifest.routes) {
+    const node = nodeById.get(route.nodeId)!;
+    if (canonicalize(route) !== canonicalize(routeFor(node))) throw new Error(`Previous route drift: ${route.nodeId}`);
+  }
+}
+
+function assertInsertionOnlyEvolution(previous: CurriculumGraph, current: CurriculumGraph): void {
+  const currentIds = new Set(current.nodes.map((node) => node.id));
+  for (const node of previous.nodes) if (!currentIds.has(node.id)) throw new Error(`Insertion-only history removed node: ${node.id}`);
 }
 
 function validateGraphProjection(graph: CurriculumGraph, relations: readonly CurriculumRelation[]): void {
@@ -164,25 +228,9 @@ function validateGraphProjection(graph: CurriculumGraph, relations: readonly Cur
   }
 }
 
-function allocateAnchors(nodes: readonly GraphNode[], graphHash: `sha256:${string}`, previous?: AnchorManifestV1): AnchorManifestV1 {
-  const nodeById = new Map(nodes.map((node) => [node.id, node]));
-  const occupied = new Set<number>();
-  const anchors = new Map<string, AnchorEntry>();
-
-  if (previous !== undefined) {
-    if (previous.schemaVersion !== ANCHOR_SCHEMA_VERSION || previous.layoutVersion !== ANCHOR_LAYOUT_VERSION || previous.compilerVersion !== M2_COMPILER_VERSION) throw new Error('Unsupported previous anchor manifest');
-    assertUnique(previous.anchors.map((anchor) => anchor.nodeId), 'previous anchor node');
-    assertUnique(previous.anchors.map((anchor) => anchor.anchorId), 'previous anchor');
-    for (const anchor of previous.anchors) {
-      const node = nodeById.get(anchor.nodeId);
-      if (node === undefined) throw new Error(`Previous anchor references missing node: ${anchor.nodeId}`);
-      if (anchor.anchorId !== anchorId(anchor.nodeId) || !Number.isSafeInteger(anchor.slot) || anchor.slot < 0 || anchor.slot > MAX_SLOT || occupied.has(anchor.slot)) throw new Error(`Invalid previous anchor: ${anchor.nodeId}`);
-      if (canonicalize(anchor.position) !== canonicalize(positionFor(node.kind, anchor.slot))) throw new Error(`Previous anchor coordinate drift: ${anchor.nodeId}`);
-      occupied.add(anchor.slot);
-      anchors.set(anchor.nodeId, anchor);
-    }
-  }
-
+function allocateAnchors(nodes: readonly CurriculumGraphNode[], graphHash: `sha256:${string}`, previous?: AnchorManifestV1): AnchorManifestV1 {
+  const occupied = new Set(previous?.anchors.map((anchor) => anchor.slot) ?? []);
+  const anchors = new Map(previous?.anchors.map((anchor) => [anchor.nodeId, anchor] as const) ?? []);
   for (const node of [...nodes].sort(compareNodes)) {
     if (anchors.has(node.id)) continue;
     let slot = initialSlot(node.id);
@@ -190,7 +238,6 @@ function allocateAnchors(nodes: readonly GraphNode[], graphHash: `sha256:${strin
     occupied.add(slot);
     anchors.set(node.id, { nodeId: node.id, anchorId: anchorId(node.id), slot, position: positionFor(node.kind, slot) });
   }
-
   return {
     schemaVersion: ANCHOR_SCHEMA_VERSION,
     layoutVersion: ANCHOR_LAYOUT_VERSION,
@@ -200,15 +247,18 @@ function allocateAnchors(nodes: readonly GraphNode[], graphHash: `sha256:${strin
   };
 }
 
-function compileRoutes(nodes: readonly GraphNode[], snapshot: BuuSnapshot, graphHash: `sha256:${string}`): RouteManifestV1 {
-  const courses = new Map(snapshot.courses.map((course) => [course.id, course]));
-  const routes = [...nodes].sort(compareNodes).map((node): RouteEntry => {
-    const course = courses.get(node.id);
-    const aliases = course === undefined ? [] : [...new Set(course.codeAssignments.map((assignment) => `/v1/courses/${encodeURIComponent(assignment.value.toLowerCase())}/${encodeURIComponent(node.id)}`))].sort(compareCodePoints);
-    return { nodeId: node.id, canonicalUrl: `/v1/nodes/${encodeURIComponent(node.id)}`, aliases };
-  });
+function compileRoutes(nodes: readonly CurriculumGraphNode[], graphHash: `sha256:${string}`, previous?: RouteManifestV1): RouteManifestV1 {
+  const retained = new Map(previous?.routes.map((route) => [route.nodeId, route] as const) ?? []);
+  const routes = [...nodes].sort(compareNodes).map((node) => retained.get(node.id) ?? routeFor(node));
   assertUnique(routes.map((route) => route.canonicalUrl), 'canonical route');
   return { schemaVersion: ROUTE_SCHEMA_VERSION, compilerVersion: M2_COMPILER_VERSION, graphHash, routes };
+}
+
+function routeFor(node: CurriculumGraphNode): RouteEntry {
+  const aliases = node.kind === 'course'
+    ? [...new Set((node.codeAssignments ?? []).map((assignment) => `/v1/courses/${encodeURIComponent(assignment.value.toLowerCase())}/${encodeURIComponent(node.id)}`))].sort(compareCodePoints)
+    : [];
+  return { nodeId: node.id, canonicalUrl: `/v1/nodes/${encodeURIComponent(node.id)}`, aliases };
 }
 
 function compilerProvenance(relations: readonly CurriculumRelation[]): Provenance {
@@ -225,11 +275,24 @@ function compilerProvenance(relations: readonly CurriculumRelation[]): Provenanc
 }
 
 function assertProvenance(provenance: Provenance, id: string): void {
-  if (!provenance || typeof provenance.sourceId !== 'string' || typeof provenance.snapshotId !== 'string' || typeof provenance.locator !== 'string' || typeof provenance.observedAt !== 'string' || !/^sha256:[0-9a-f]{64}$/u.test(provenance.contentHash)) throw new Error(`Missing provenance: ${id}`);
+  const required = [provenance.sourceId, provenance.snapshotId, provenance.locator, provenance.observedAt, provenance.transformationVersion];
+  if (required.some((value) => typeof value !== 'string' || value.trim().length === 0)) throw new Error(`Incomplete provenance: ${id}`);
+  if (!SHA256.test(provenance.contentHash)) throw new Error(`Invalid provenance hash: ${id}`);
+  if (!Number.isFinite(Date.parse(provenance.observedAt))) throw new Error(`Invalid provenance timestamp: ${id}`);
 }
 
-function assertUnique(values: readonly (string | number)[], label: string): void {
-  if (new Set(values).size !== values.length) throw new Error(`Duplicate ${label} id`);
+function sourceTuple(provenance: Provenance): string {
+  return canonicalize({ sourceId: provenance.sourceId, snapshotId: provenance.snapshotId, observedAt: provenance.observedAt, contentHash: provenance.contentHash });
+}
+
+function assertUnique<T extends string | number>(values: readonly T[], label: string): Set<T> {
+  const result = new Set(values);
+  if (result.size !== values.length) throw new Error(`Duplicate ${label} id`);
+  return result;
+}
+
+function assertSameSet(expected: ReadonlySet<string>, actual: ReadonlySet<string>, message: string): void {
+  if (expected.size !== actual.size || [...expected].some((id) => !actual.has(id))) throw new Error(message);
 }
 
 function compareNodes(a: GraphNode, b: GraphNode): number {
