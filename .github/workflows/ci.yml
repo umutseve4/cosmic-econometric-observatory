@@ -19,24 +19,24 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
           source_path = Path("src/curriculum-compiler.ts")
           source = source_path.read_text()
-          old_nodes = """}))
-          ].sort(compareNodes);"""
-          new_nodes = """}))
-          ];
-          nodes.sort(compareNodes);"""
-          old_edges = """}))
-          ].sort((a, b) => compareCodePoints(a.id, b.id));"""
-          new_edges = """}))
-          ];
-          edges.sort((a, b) => compareCodePoints(a.id, b.id));"""
-          if source.count(old_nodes) != 1:
-              raise SystemExit(f"expected one node pattern, found {source.count(old_nodes)}")
-          if source.count(old_edges) != 1:
-              raise SystemExit(f"expected one edge pattern, found {source.count(old_edges)}")
-          source = source.replace(old_nodes, new_nodes).replace(old_edges, new_edges)
+          source, node_count = re.subn(
+              r"(\}\)\)\n)(\s*)\]\.sort\(compareNodes\);",
+              r"\1\2];\n\2nodes.sort(compareNodes);",
+              source,
+          )
+          source, edge_count = re.subn(
+              r"(\}\)\)\n)(\s*)\]\.sort\(\(a, b\) => compareCodePoints\(a\.id, b\.id\)\);",
+              r"\1\2];\n\2edges.sort((a, b) => compareCodePoints(a.id, b.id));",
+              source,
+          )
+          if node_count != 1:
+              raise SystemExit(f"expected one node replacement, got {node_count}")
+          if edge_count != 1:
+              raise SystemExit(f"expected one edge replacement, got {edge_count}")
           source_path.write_text(source)
 
           canonical_ci = """name: CI
