@@ -37,7 +37,7 @@ jobs:
             echo '<!-- ci-verification-diagnostics -->'
             echo '### CI verification failure'
             echo '```text'
-            tail -n 160 verify.log
+            tail -n 400 verify.log
             echo '```'
           } > verify-comment.md
           gh pr comment "$PR_NUMBER" --body-file verify-comment.md
