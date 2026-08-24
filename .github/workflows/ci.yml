@@ -14,13 +14,19 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { code: 2322, range: 085-089 }
-          - { code: 2322, range: 090-094 }
-          - { code: 2322, range: 105-109 }
-          - { code: 2322, range: 110-114 }
-          - { code: 2345, range: 100-102 }
-          - { code: 2345, range: 103-104 }
-    name: locate-TS${{ matrix.code }}-${{ matrix.range }}
+          - { code: 2322, line: 90 }
+          - { code: 2322, line: 91 }
+          - { code: 2322, line: 92 }
+          - { code: 2322, line: 93 }
+          - { code: 2322, line: 94 }
+          - { code: 2322, line: 105 }
+          - { code: 2322, line: 106 }
+          - { code: 2322, line: 107 }
+          - { code: 2322, line: 108 }
+          - { code: 2322, line: 109 }
+          - { code: 2345, line: 103 }
+          - { code: 2345, line: 104 }
+    name: locate-TS${{ matrix.code }}-line-${{ matrix.line }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -33,8 +39,8 @@ jobs:
       - name: Locate TypeScript diagnostic
         env:
           CODE: ${{ matrix.code }}
-          RANGE: ${{ matrix.range }}
+          LINE: ${{ matrix.line }}
         run: |
           node -e "const fs=require('node:fs');const c=JSON.parse(fs.readFileSync('tsconfig.json','utf8'));c.include=['src/**/*.ts'];fs.writeFileSync('tsconfig.diagnostic.json',JSON.stringify(c));"
           npx tsc -p tsconfig.diagnostic.json --noEmit --pretty false > diagnostics.txt 2>&1 || true
-          node -e "const fs=require('node:fs');const [lo,hi]=process.env.RANGE.split('-').map(Number);const code=Number(process.env.CODE);const text=fs.readFileSync('diagnostics.txt','utf8');const hits=[...text.matchAll(/^(.+)\((\d+),(\d+)\): error TS(\d+):/gm)].filter(([,file,line,,diagnostic])=>file==='src/curriculum-compiler.ts'&&Number(diagnostic)===code&&Number(line)>=lo&&Number(line)<=hi);process.exit(hits.length>0?1:0);"
+          node -e "const fs=require('node:fs');const line=Number(process.env.LINE);const code=Number(process.env.CODE);const text=fs.readFileSync('diagnostics.txt','utf8');const hits=[...text.matchAll(/^(.+)\((\d+),(\d+)\): error TS(\d+):/gm)].filter(([,file,actualLine,,diagnostic])=>file==='src/curriculum-compiler.ts'&&Number(diagnostic)===code&&Number(actualLine)===line);process.exit(hits.length>0?1:0);"
