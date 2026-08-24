@@ -9,24 +9,17 @@ permissions:
   contents: read
 
 jobs:
-  locate-typescript-diagnostics:
+  diagnostic-inventory:
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { code: 2322, line: 90 }
-          - { code: 2322, line: 91 }
-          - { code: 2322, line: 92 }
-          - { code: 2322, line: 93 }
-          - { code: 2322, line: 94 }
-          - { code: 2322, line: 105 }
-          - { code: 2322, line: 106 }
-          - { code: 2322, line: 107 }
-          - { code: 2322, line: 108 }
-          - { code: 2322, line: 109 }
-          - { code: 2345, line: 103 }
-          - { code: 2345, line: 104 }
-    name: locate-TS${{ matrix.code }}-line-${{ matrix.line }}
+          - { check: exact-TS2322-92-9, mode: exact, code: 2322, line: 92, column: 9 }
+          - { check: exact-TS2345-103-10, mode: exact, code: 2345, line: 103, column: 10 }
+          - { check: exact-TS2322-105-9, mode: exact, code: 2322, line: 105, column: 9 }
+          - { check: exactly-three-diagnostics, mode: count, code: 0, line: 0, column: 0 }
+          - { check: no-other-codes, mode: inventory, code: 0, line: 0, column: 0 }
+    name: ${{ matrix.check }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -36,11 +29,13 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --ignore-scripts
-      - name: Locate TypeScript diagnostic
+      - name: Verify TypeScript diagnostic inventory
         env:
+          MODE: ${{ matrix.mode }}
           CODE: ${{ matrix.code }}
           LINE: ${{ matrix.line }}
+          COLUMN: ${{ matrix.column }}
         run: |
           node -e "const fs=require('node:fs');const c=JSON.parse(fs.readFileSync('tsconfig.json','utf8'));c.include=['src/**/*.ts'];fs.writeFileSync('tsconfig.diagnostic.json',JSON.stringify(c));"
           npx tsc -p tsconfig.diagnostic.json --noEmit --pretty false > diagnostics.txt 2>&1 || true
-          node -e "const fs=require('node:fs');const line=Number(process.env.LINE);const code=Number(process.env.CODE);const text=fs.readFileSync('diagnostics.txt','utf8');const hits=[...text.matchAll(/^(.+)\((\d+),(\d+)\): error TS(\d+):/gm)].filter(([,file,actualLine,,diagnostic])=>file==='src/curriculum-compiler.ts'&&Number(diagnostic)===code&&Number(actualLine)===line);process.exit(hits.length>0?1:0);"
+          node -e "const fs=require('node:fs');const text=fs.readFileSync('diagnostics.txt','utf8');const ds=[...text.matchAll(/^(.+)\((\d+),(\d+)\): error TS(\d+):/gm)].map(([,file,line,column,code])=>({file,line:Number(line),column:Number(column),code:Number(code)}));const mode=process.env.MODE;let ok=false;if(mode==='exact')ok=ds.filter(d=>d.file==='src/curriculum-compiler.ts'&&d.code===Number(process.env.CODE)&&d.line===Number(process.env.LINE)&&d.column===Number(process.env.COLUMN)).length===1;if(mode==='count')ok=ds.length===3;if(mode==='inventory')ok=ds.every(d=>d.file==='src/curriculum-compiler.ts'&&((d.code===2322&&[92,105].includes(d.line))||(d.code===2345&&d.line===103)));process.exit(ok?0:1);"
