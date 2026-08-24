@@ -1,4 +1,4 @@
-name: M2a repair
+name: M2a source repair
 
 on:
   push:
@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: feat/m2a-curriculum-graph-core
-      - name: Apply minimal contextual-typing fix and restore canonical CI
+      - name: Apply minimal contextual-typing fix
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -38,36 +38,11 @@ jobs:
           if (node_count, edge_count) != (1, 1):
               raise SystemExit(f"unexpected replacement counts: nodes={node_count}, edges={edge_count}")
           source_path.write_text("\n".join(output) + "\n")
-
-          canonical_ci = """name: CI
-
-          on:
-            push:
-              branches: [main]
-            pull_request:
-
-          permissions:
-            contents: read
-
-          jobs:
-            verify:
-              runs-on: ubuntu-latest
-              timeout-minutes: 10
-              steps:
-                - uses: actions/checkout@v4
-                - uses: actions/setup-node@v4
-                  with:
-                    node-version: 22
-                    cache: npm
-                - run: npm ci --ignore-scripts
-                - run: npm run verify
-          """
-          Path(".github/workflows/ci.yml").write_text(canonical_ci)
           PY
           git diff --check
-          test "$(git diff --name-only | sort)" = $'.github/workflows/ci.yml\nsrc/curriculum-compiler.ts'
+          test "$(git diff --name-only)" = "src/curriculum-compiler.ts"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .github/workflows/ci.yml src/curriculum-compiler.ts
+          git add src/curriculum-compiler.ts
           git commit -m "fix: preserve M2a contextual typing"
           git push origin HEAD:feat/m2a-curriculum-graph-core
