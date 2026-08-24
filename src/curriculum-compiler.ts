@@ -100,7 +100,8 @@ export function compileBuuCurriculum(snapshot: BuuSnapshot, previous?: Curriculu
       provenance: course.provenance,
       codeAssignments: course.codeAssignments.map((assignment) => ({ ...assignment }))
     }))
-  ].sort(compareNodes);
+  ];
+  nodes.sort(compareNodes);
 
   const edges: CurriculumGraphEdge[] = [
     { id: 'edge:contains:institution:buu:program:econometrics', kind: 'CONTAINS', source: INSTITUTION_ID, target: PROGRAM_ID, provenance: derivedProvenance },
@@ -119,7 +120,8 @@ export function compileBuuCurriculum(snapshot: BuuSnapshot, previous?: Curriculu
         ...(relation.poolId === undefined ? {} : { poolId: relation.poolId })
       }
     }))
-  ].sort((a, b) => compareCodePoints(a.id, b.id));
+  ];
+  edges.sort((a, b) => compareCodePoints(a.id, b.id));
 
   const domainIds = new Set<string>([CURRICULUM_ID, ...courses.map((course) => course.id), ...relations.map((relation) => relation.id)]);
   const anomalies = snapshot.anomalies
