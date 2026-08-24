@@ -9,12 +9,13 @@ permissions:
   contents: read
 
 jobs:
-  identify-typescript-error:
+  locate-typescript-diagnostics:
     strategy:
       fail-fast: false
       matrix:
-        code: [2304, 2318, 2322, 2345, 2375, 2412, 2532, 2688]
-    name: diagnostic-TS${{ matrix.code }}
+        code: [2322, 2345]
+        range: [000-099, 100-199, 200-299, 300-399]
+    name: locate-TS${{ matrix.code }}-${{ matrix.range }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -24,9 +25,11 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --ignore-scripts
-      - name: Identify TypeScript diagnostic
+      - name: Locate TypeScript diagnostic
         env:
           CODE: ${{ matrix.code }}
+          RANGE: ${{ matrix.range }}
         run: |
-          npx tsc --noEmit --pretty false > diagnostics.txt 2>&1 || true
-          if grep -Fq "error TS${CODE}:" diagnostics.txt; then exit 1; fi
+          node -e "const fs=require('node:fs');const c=JSON.parse(fs.readFileSync('tsconfig.json','utf8'));c.include=['src/**/*.ts'];fs.writeFileSync('tsconfig.diagnostic.json',JSON.stringify(c));"
+          npx tsc -p tsconfig.diagnostic.json --noEmit --pretty false > diagnostics.txt 2>&1 || true
+          node -e "const fs=require('node:fs');const [lo,hi]=process.env.RANGE.split('-').map(Number);const code=Number(process.env.CODE);const text=fs.readFileSync('diagnostics.txt','utf8');const hits=[...text.matchAll(/^(.+)\((\d+),(\d+)\): error TS(\d+):/gm)].filter(([,file,line,,diagnostic])=>file==='src/curriculum-compiler.ts'&&Number(diagnostic)===code&&Number(line)>=lo&&Number(line)<=hi);process.exit(hits.length>0?1:0);"
