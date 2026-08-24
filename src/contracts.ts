@@ -61,16 +61,16 @@ export function validateRecord(input: unknown): ValidationResult<DomainRecord> {
   if (!validProvenance(r.provenance)) return rejected(input, 'MISSING_PROVENANCE');
   if (r.kind === 'course' && typeof r.id === 'string' && typeof r.canonicalTitle === 'string' && Array.isArray(r.codeAssignments)) {
     const forbidden = ['semester', 'instructorIds', 'schedule', 'academicYear'];
-    if (forbidden.some((k) => k in r)) return rejected(input, 'CONFLICTING_VALUE');
-    return { accepted: [input as Course], rejected: [], anomalies: [] };
+    if (forbidden.some((key) => key in r)) return rejected(input, 'CONFLICTING_VALUE');
+    return { accepted: [input as unknown as Course], rejected: [], anomalies: [] };
   }
   if (r.kind === 'curriculum-relation' && typeof r.id === 'string' && typeof r.courseId === 'string' && typeof r.curriculumVersionId === 'string' && Number.isInteger(r.semester) && typeof r.ects === 'number') {
-    return { accepted: [input as CurriculumRelation], rejected: [], anomalies: [] };
+    return { accepted: [input as unknown as CurriculumRelation], rejected: [], anomalies: [] };
   }
   if (r.kind === 'offering' && typeof r.id === 'string' && typeof r.courseId === 'string' && typeof r.academicYear === 'string' && typeof r.section === 'string') {
     const forbidden = ['canonicalTitle', 'ects', 'semester'];
-    if (forbidden.some((k) => k in r)) return rejected(input, 'CONFLICTING_VALUE');
-    return { accepted: [input as Offering], rejected: [], anomalies: [] };
+    if (forbidden.some((key) => key in r)) return rejected(input, 'CONFLICTING_VALUE');
+    return { accepted: [input as unknown as Offering], rejected: [], anomalies: [] };
   }
   return rejected(input, 'UNKNOWN_KIND');
 }
