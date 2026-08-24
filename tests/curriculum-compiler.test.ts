@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { dirname, join } from 'node:path';
@@ -98,6 +99,9 @@ test('duplicate, dangling and malformed provenance inputs are fatal', () => {
 
   const mixed: readonly CurriculumRelation[] = snapshot.curriculumRelations.map((relation, index) => index === 0 ? { ...relation, provenance: { ...relation.provenance, snapshotId: 'snapshot:other' } } : relation);
   assert.throws(() => compileBuuCurriculum({ ...snapshot, curriculumRelations: mixed }), /Mixed curriculum source provenance/);
+
+  const mixedCourse: Course = { ...snapshot.courses[0]!, provenance: { ...snapshot.courses[0]!.provenance, snapshotId: 'snapshot:other' } };
+  assert.throws(() => compileBuuCurriculum({ ...snapshot, courses: [mixedCourse, ...snapshot.courses.slice(1)] }), /Mixed curriculum source provenance/);
 });
 
 test('dangling anomaly references are fatal while known out-of-domain offering anomalies are excluded', () => {
@@ -121,6 +125,24 @@ test('missing or tampered previous graph, anchor and route history is fatal', ()
 
   const changedGraph = replacePrevious(baseline, { graph: { ...baseline.graph, nodes: baseline.graph.nodes.map((node, index) => index === 0 ? { ...node, label: `${node.label} tampered` } : node) } });
   assert.throws(() => compileBuuCurriculum(snapshot, changedGraph), /hash mismatch/);
+
+  const coordinatedGraph = { ...baseline.graph, nodes: baseline.graph.nodes.map((node, index) => index === 0 ? { ...node, label: `${node.label} tampered` } : node) };
+  const coordinatedHash = `sha256:${createHash('sha256').update(canonicalize(coordinatedGraph)).digest('hex')}` as const;
+  const coordinatedNodeTampering = replacePrevious(baseline, {
+    graph: coordinatedGraph,
+    anchorManifest: { ...baseline.anchorManifest, graphHash: coordinatedHash },
+    routeManifest: { ...baseline.routeManifest, graphHash: coordinatedHash }
+  });
+  assert.throws(() => compileBuuCurriculum(snapshot, coordinatedNodeTampering), /changed node/);
+
+  const coordinatedEdgeGraph = { ...baseline.graph, edges: baseline.graph.edges.map((edge, index) => index === 0 ? { ...edge, provenance: { ...edge.provenance, locator: `${edge.provenance.locator}#tampered` } } : edge) };
+  const coordinatedEdgeHash = `sha256:${createHash('sha256').update(canonicalize(coordinatedEdgeGraph)).digest('hex')}` as const;
+  const coordinatedEdgeTampering = replacePrevious(baseline, {
+    graph: coordinatedEdgeGraph,
+    anchorManifest: { ...baseline.anchorManifest, graphHash: coordinatedEdgeHash },
+    routeManifest: { ...baseline.routeManifest, graphHash: coordinatedEdgeHash }
+  });
+  assert.throws(() => compileBuuCurriculum(snapshot, coordinatedEdgeTampering), /changed edge/);
 
   const movedAnchor = replacePrevious(baseline, { anchorManifest: { ...baseline.anchorManifest, anchors: baseline.anchorManifest.anchors.map((anchor, index) => index === 0 ? { ...anchor, position: { ...anchor.position, x: anchor.position.x + 1 } } : anchor) } });
   assert.throws(() => compileBuuCurriculum(snapshot, movedAnchor), /coordinate drift/);

@@ -176,6 +176,10 @@ function validateCompilerInput(snapshot: BuuSnapshot): void {
   for (const relation of snapshot.curriculumRelations) {
     if (sourceTuple(relation.provenance) !== expectedSource) throw new Error(`Mixed curriculum source provenance: ${relation.id}`);
   }
+  const graphCourseIds = new Set(snapshot.curriculumRelations.map((relation) => relation.courseId));
+  for (const course of snapshot.courses) {
+    if (graphCourseIds.has(course.id) && sourceTuple(course.provenance) !== expectedSource) throw new Error(`Mixed curriculum source provenance: ${course.id}`);
+  }
 }
 
 function validatePreviousCompilation(previous: CurriculumCompilation): void {
@@ -208,8 +212,26 @@ function validatePreviousCompilation(previous: CurriculumCompilation): void {
 }
 
 function assertInsertionOnlyEvolution(previous: CurriculumGraph, current: CurriculumGraph): void {
-  const currentIds = new Set(current.nodes.map((node) => node.id));
-  for (const node of previous.nodes) if (!currentIds.has(node.id)) throw new Error(`Insertion-only history removed node: ${node.id}`);
+  const currentNodes = new Map(current.nodes.map((node) => [node.id, node] as const));
+  for (const node of previous.nodes) {
+    const retained = currentNodes.get(node.id);
+    if (retained === undefined) throw new Error(`Insertion-only history removed node: ${node.id}`);
+    if (canonicalize(retained) !== canonicalize(node)) throw new Error(`Insertion-only history changed node: ${node.id}`);
+  }
+
+  const currentEdges = new Map(current.edges.map((edge) => [edge.id, edge] as const));
+  for (const edge of previous.edges) {
+    const retained = currentEdges.get(edge.id);
+    if (retained === undefined) throw new Error(`Insertion-only history removed edge: ${edge.id}`);
+    if (canonicalize(retained) !== canonicalize(edge)) throw new Error(`Insertion-only history changed edge: ${edge.id}`);
+  }
+
+  const currentAnomalies = new Map(current.anomalies.map((anomaly) => [anomaly.id, anomaly] as const));
+  for (const anomaly of previous.anomalies) {
+    const retained = currentAnomalies.get(anomaly.id);
+    if (retained === undefined) throw new Error(`Insertion-only history removed anomaly: ${anomaly.id}`);
+    if (canonicalize(retained) !== canonicalize(anomaly)) throw new Error(`Insertion-only history changed anomaly: ${anomaly.id}`);
+  }
 }
 
 function validateGraphProjection(graph: CurriculumGraph, relations: readonly CurriculumRelation[]): void {
