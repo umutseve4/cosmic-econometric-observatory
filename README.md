@@ -2,9 +2,9 @@
 
 A deterministic, provenance-first world engine that compiles versioned academic catalogs into a knowledge graph, renderer-neutral Scene IR, and accessible projections.
 
-This is a clean successor project. [`umutseve4/eko-rasathane`](https://github.com/umutseve4/eko-rasathane) remains an immutable legacy/reference repository; its application code and history are not copied here.
+This is a clean successor project. [`umutseve4/eko-rasathane`](https://github.com/umutseve4/eko-rasathane) remains an immutable legacy/reference repository; its application code and history are never imported or executed here.
 
-## M0 — Deterministic Universal Spine
+## Architecture
 
 `source snapshot → explicit assertions/anomalies → domain graph → deterministic layout → Scene IR → 3D manifest / SVG / HTML`
 
@@ -16,13 +16,27 @@ This is a clean successor project. [`umutseve4/eko-rasathane`](https://github.co
 
 Human-facing course codes are assignments, never identity. Raw source values are never silently corrected. Every accepted or rejected assertion remains traceable to a content-addressed snapshot.
 
-### Verify
+## M1 — Source-backed BUÜ snapshot
 
-Requires Node.js 22 or newer.
+M1 pins the 2025–2026 BUÜ Economics curriculum and timetable at legacy commit `db8d52f0b29d712c34e8b7487e2299ce9f75c266`.
+
+- `144` curriculum relations: `41` required and `103` elective.
+- `164` source offerings: `83` spring, `81` fall, `108` first education, `56` second education.
+- Reconciliation: `129` mapped, `15` mapped-with-anomaly, `0` ambiguous, `20` unmatched.
+- Unmatched offerings receive timetable-derived `Course` identities; no fake curriculum relation is invented.
+- Duplicate codes, suspicious spellings, the `241` versus `240` ECTS conflict, and printed-code mismatches remain explicit anomalies.
+- Fixture lengths and SHA-256 values are checked against the committed manifest.
+- Tests cover mutation rejection, referential integrity, cross-process/environment determinism, and legacy runtime isolation.
+
+## Verify
+
+Requires Node.js 22 or newer. The dependency graph is locked.
 
 ```sh
-npm install --ignore-scripts
+npm ci --ignore-scripts
 npm run verify
 ```
 
-M0 deliberately excludes scraping, databases, user accounts, LLM/RAG integration, real-time physics, and a production WebGL renderer. The `three` projection is a renderer-neutral manifest, not a GPU implementation.
+The standard verification gate includes type checking, build, M0/M1 domain tests, materializer safety tests, fixture integrity, environment determinism, and legacy-isolation tests.
+
+A production WebGL renderer, scraping, databases, user accounts, and LLM/RAG integration remain outside M1.
