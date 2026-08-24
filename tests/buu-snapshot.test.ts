@@ -12,22 +12,22 @@ const offeringText = readFileSync(join(fixture, 'offerings.json'), 'utf8');
 const rawOfferings: unknown = JSON.parse(offeringText);
 const snapshot = importBuuSnapshot(curriculum, rawOfferings);
 
-const expectedAnomalyOfferings = [
-  'offering-2025-2026-spring-2025-2026-spring-10-feb-049',
-  'offering-2025-2026-spring-2025-2026-spring-10-feb-050',
-  'offering-2025-2026-spring-2025-2026-spring-10-feb-226',
-  'offering-2025-2026-spring-2025-2026-spring-10-feb-380',
-  'offering-2025-2026-spring-2025-2026-spring-10-feb-381',
-  'offering-2025-2026-spring-2025-2026-spring-10-feb-391',
-  'offering-2025-2026-fall-2025-2026-fall-19-sep-011',
-  'offering-2025-2026-fall-2025-2026-fall-19-sep-112',
-  'offering-2025-2026-fall-2025-2026-fall-19-sep-113',
-  'offering-2025-2026-fall-2025-2026-fall-19-sep-369',
-  'offering-2025-2026-fall-2025-2026-fall-19-sep-370',
-  'offering-2025-2026-fall-2025-2026-fall-19-sep-415',
-  'offering-2025-2026-fall-2025-2026-fall-19-sep-416',
-  'offering-2025-2026-fall-2025-2026-fall-19-sep-417',
-  'offering-2025-2026-fall-2025-2026-fall-19-sep-418'
+const expectedAnomalyProjection: [string, string, string, string[]][] = [
+  ['offering-2025-2026-spring-2025-2026-spring-10-feb-049', 'mapped-with-anomaly', 'title-semester-type-with-printed-code-mismatch', ['offering-printed-code-mismatch:offering-2025-2026-spring-2025-2026-spring-10-feb-049', 'anomaly-duplicate-course-buu-ay33-s6-elective-ikt3306-1']],
+  ['offering-2025-2026-spring-2025-2026-spring-10-feb-050', 'mapped-with-anomaly', 'title-semester-type-with-printed-code-mismatch', ['offering-printed-code-mismatch:offering-2025-2026-spring-2025-2026-spring-10-feb-050', 'anomaly-duplicate-course-buu-ay33-s6-elective-ikt3306-1']],
+  ['offering-2025-2026-spring-2025-2026-spring-10-feb-226', 'mapped-with-anomaly', 'title-semester-type-with-printed-code-mismatch', ['offering-printed-code-mismatch:offering-2025-2026-spring-2025-2026-spring-10-feb-226']],
+  ['offering-2025-2026-spring-2025-2026-spring-10-feb-380', 'mapped-with-anomaly', 'title-semester-type-with-printed-code-mismatch', ['offering-printed-code-mismatch:offering-2025-2026-spring-2025-2026-spring-10-feb-380']],
+  ['offering-2025-2026-spring-2025-2026-spring-10-feb-381', 'mapped-with-anomaly', 'title-semester-type-with-printed-code-mismatch', ['offering-printed-code-mismatch:offering-2025-2026-spring-2025-2026-spring-10-feb-381']],
+  ['offering-2025-2026-spring-2025-2026-spring-10-feb-391', 'mapped-with-anomaly', 'code-title-semester-type', ['anomaly-duplicate-course-buu-ay33-s4-required-eko2004-1']],
+  ['offering-2025-2026-fall-2025-2026-fall-19-sep-011', 'mapped-with-anomaly', 'title-semester-type-with-printed-code-mismatch', ['offering-printed-code-mismatch:offering-2025-2026-fall-2025-2026-fall-19-sep-011']],
+  ['offering-2025-2026-fall-2025-2026-fall-19-sep-112', 'mapped-with-anomaly', 'title-semester-type-with-printed-code-mismatch', ['offering-printed-code-mismatch:offering-2025-2026-fall-2025-2026-fall-19-sep-112']],
+  ['offering-2025-2026-fall-2025-2026-fall-19-sep-113', 'mapped-with-anomaly', 'title-semester-type-with-printed-code-mismatch', ['offering-printed-code-mismatch:offering-2025-2026-fall-2025-2026-fall-19-sep-113']],
+  ['offering-2025-2026-fall-2025-2026-fall-19-sep-369', 'mapped-with-anomaly', 'title-semester-type-with-printed-code-mismatch', ['offering-printed-code-mismatch:offering-2025-2026-fall-2025-2026-fall-19-sep-369']],
+  ['offering-2025-2026-fall-2025-2026-fall-19-sep-370', 'mapped-with-anomaly', 'title-semester-type-with-printed-code-mismatch', ['offering-printed-code-mismatch:offering-2025-2026-fall-2025-2026-fall-19-sep-370']],
+  ['offering-2025-2026-fall-2025-2026-fall-19-sep-415', 'mapped-with-anomaly', 'code-title-semester-type', ['anomaly-duplicate-course-buu-ay33-s7-required-eko4305-1']],
+  ['offering-2025-2026-fall-2025-2026-fall-19-sep-416', 'mapped-with-anomaly', 'code-title-semester-type', ['anomaly-duplicate-course-buu-ay33-s7-required-eko4305-1']],
+  ['offering-2025-2026-fall-2025-2026-fall-19-sep-417', 'mapped-with-anomaly', 'code-title-semester-type', ['anomaly-duplicate-course-buu-ay33-s7-required-eko4305-1']],
+  ['offering-2025-2026-fall-2025-2026-fall-19-sep-418', 'mapped-with-anomaly', 'code-title-semester-type', ['anomaly-duplicate-course-buu-ay33-s7-required-eko4305-1']]
 ];
 
 test('imports the exact immutable M1 census and partitions', () => {
@@ -45,9 +45,11 @@ test('all domain records pass strict contracts and references are complete', () 
   assert.ok(snapshot.reconciliations.every((row) => row.canonicalCurriculumRelationId === null || relationIds.has(row.canonicalCurriculumRelationId)));
 });
 
-test('exact anomaly-bearing offering projection remains stable', () => {
-  const actual = snapshot.reconciliations.filter((row) => row.anomalyRefs.length > 0).map((row) => row.offeringId);
-  assert.deepEqual(actual, expectedAnomalyOfferings);
+test('complete anomaly projection remains byte-for-byte explicit', () => {
+  const actual = snapshot.reconciliations
+    .filter((row) => row.anomalyRefs.length > 0)
+    .map((row): [string, string, string, string[]] => [row.offeringId, row.status, row.reason, row.anomalyRefs]);
+  assert.deepEqual(actual, expectedAnomalyProjection);
 });
 
 test('source anomalies remain literal and duplicate rows remain distinct', () => {
@@ -61,7 +63,7 @@ test('source anomalies remain literal and duplicate rows remain distinct', () =>
 test('EKO1202 Mathematics II mismatch is never silently corrected', () => {
   const rows = snapshot.reconciliations.filter((row) => row.printedCode === 'EKO1202' && row.printedTitle.toLocaleUpperCase('tr-TR') === 'MATEMATİK II');
   assert.ok(rows.length > 0);
-  assert.ok(rows.every((row) => row.status === 'mapped-with-anomaly' && row.reason === 'title-semester-type-with-printed-code-mismatch' && row.anomalyRefs.some((ref) => ref.startsWith('offering-printed-code-mismatch:'))));
+  assert.ok(rows.every((row) => row.status === 'mapped-with-anomaly' && row.reason === 'title-semester-type-with-printed-code-mismatch' && row.anomalyRefs.some((ref) => ref === `offering-printed-code-mismatch:${row.offeringId}`)));
 });
 
 test('fixture mutation, correction, omission and deduplication are fatal', () => {
