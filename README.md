@@ -6,7 +6,7 @@ This is a clean successor project. [`umutseve4/eko-rasathane`](https://github.co
 
 ## Architecture
 
-`source snapshot → explicit assertions/anomalies → domain graph → deterministic layout → Scene IR → 3D manifest / SVG / HTML`
+`source snapshot → explicit assertions/anomalies → curriculum compiler → stable anchors/routes → domain graph → Scene IR → projections`
 
 | Entity | Meaning | Must not contain |
 |---|---|---|
@@ -26,7 +26,19 @@ M1 pins the 2025–2026 BUÜ Economics curriculum and timetable at legacy commit
 - Unmatched offerings receive timetable-derived `Course` identities; no fake curriculum relation is invented.
 - Duplicate codes, suspicious spellings, the `241` versus `240` ECTS conflict, and printed-code mismatches remain explicit anomalies.
 - Fixture lengths and SHA-256 values are checked against the committed manifest.
-- Tests cover mutation rejection, referential integrity, cross-process/environment determinism, and legacy runtime isolation.
+
+## M2a — Deterministic curriculum graph core
+
+M2a compiles the source-backed institution, Econometrics program, 2025–2026 curriculum, and its curriculum courses into versioned artifacts.
+
+- Every `144` `CurriculumRelation` record is projected exactly once with semester, status, ECTS, optional pool, and provenance.
+- `AnchorManifestV1` accepts explicit history and retains every unaffected anchor, slot, and coordinate byte-for-byte during insertion.
+- `RouteManifestV1` derives canonical `/v1/nodes/{persistent-id}` URLs from stable identity; course codes are aliases only.
+- Input ordering and locale cannot alter canonical output.
+- Duplicate/dangling identities, missing provenance, silent relation drift, and tampered previous manifests are fatal.
+- Topics and laboratories are intentionally deferred until pinned evidence exists; renderer and deployment remain outside M2a.
+
+See [`docs/adr/0002-m2a-curriculum-graph-core.md`](docs/adr/0002-m2a-curriculum-graph-core.md) for the exact boundary.
 
 ## Verify
 
@@ -37,6 +49,6 @@ npm ci --ignore-scripts
 npm run verify
 ```
 
-The standard verification gate includes type checking, build, M0/M1 domain tests, materializer safety tests, fixture integrity, environment determinism, and legacy-isolation tests.
+The standard verification gate includes type checking, build, M0/M1/M2 domain tests, materializer safety tests, fixture integrity, environment determinism, and legacy-isolation tests.
 
-A production WebGL renderer, scraping, databases, user accounts, and LLM/RAG integration remain outside M1.
+A production WebGL renderer, scraping, databases, user accounts, and LLM/RAG integration are not yet implemented.
