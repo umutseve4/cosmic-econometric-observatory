@@ -14,12 +14,13 @@ The compiler emits three canonical JSON-safe artifacts:
 2. `AnchorManifestV1` using `content-addressed-slots-v1`.
 3. `RouteManifestV1` with canonical `/v1/nodes/{persistent-id}` routes.
 
-A previous anchor manifest is explicit input. Existing entries are validated and retained byte-for-byte; new nodes receive deterministic, collision-resolved slots. Hidden mutable allocation state is forbidden. Course-code routes are aliases and never identity.
+Insertion-only evolution accepts a complete previous `CurriculumCompilation`, never a detached anchor manifest. The compiler recomputes the previous graph hash, requires both manifests to reference it, requires exact graph/anchor/route node-set parity, validates every prior coordinate and semantic route, and rejects removal of a prior node. Retained anchors and routes remain byte-for-byte unchanged; only new nodes receive deterministic collision-resolved slots and routes. Hidden mutable allocation state is forbidden. Course-code routes are aliases and never identity.
 
 ## Safety and provenance gates
 
 - `Course ≠ CurriculumRelation ≠ Offering` remains normative.
-- Duplicate identities, dangling references, missing provenance, duplicate relation projection, and tampered previous anchors are fatal.
+- Duplicate identities, dangling references, missing or malformed provenance, mixed curriculum source tuples, duplicate relation projection, and missing or tampered prior history are fatal.
+- Every anomaly reference must resolve to a known snapshot entity before M2 domain filtering. Known offering-only anomalies may then be deliberately excluded because offerings are outside the M2a graph.
 - Curriculum anomalies whose references are wholly inside the compiled domain remain explicit.
 - The M1 snapshot is input-only; offerings and reconciliations are not compiled, repaired, or mutated.
 - Canonical output is independent of input order and locale.
@@ -30,4 +31,4 @@ M2a does not invent topics or laboratories because no pinned source evidence exi
 
 ## Exit test
 
-Adding a synthetic course with the previous manifest must leave every unaffected persistent node ID, anchor, slot, coordinate, and canonical URL byte-for-byte unchanged while all M0/M1 regression gates remain green.
+Adding a synthetic course with the complete previous compilation must leave every unaffected persistent node ID, anchor, slot, coordinate, and canonical URL byte-for-byte unchanged. Missing or tampered prior graph/anchor/route state, mixed provenance, unknown anomaly references, and prior-node removal must fail while all M0/M1 regression gates remain green.
