@@ -14,7 +14,7 @@ jobs:
       fail-fast: false
       matrix:
         code: [2322, 2345]
-        range: [000-049, 050-099, 100-149, 150-199]
+        range: [050-074, 075-099, 100-124, 125-149]
     name: locate-TS${{ matrix.code }}-${{ matrix.range }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
