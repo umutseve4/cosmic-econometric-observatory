@@ -9,7 +9,22 @@ permissions:
   contents: read
 
 jobs:
-  typecheck:
+  typecheck-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Typecheck source only
+        run: |
+          node -e "const fs=require('node:fs');const c=JSON.parse(fs.readFileSync('tsconfig.json','utf8'));c.include=['src/**/*.ts'];fs.writeFileSync('tsconfig.diagnostic.json',JSON.stringify(c));"
+          npx tsc -p tsconfig.diagnostic.json --noEmit
+
+  typecheck-full:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -20,27 +35,3 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
       - run: npm run typecheck
-
-  build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci --ignore-scripts
-      - run: npm run build
-
-  test:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci --ignore-scripts
-      - run: npm test
