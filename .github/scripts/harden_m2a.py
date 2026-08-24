@@ -1,0 +1,105 @@
+from pathlib import Path
+
+compiler = Path('src/curriculum-compiler.ts')
+text = compiler.read_text()
+old = """  const expectedSource = sourceTuple(snapshot.curriculumRelations[0]!.provenance);
+  for (const relation of snapshot.curriculumRelations) {
+    if (sourceTuple(relation.provenance) !== expectedSource) throw new Error(`Mixed curriculum source provenance: ${relation.id}`);
+  }
+"""
+new = """  const expectedSource = sourceTuple(snapshot.curriculumRelations[0]!.provenance);
+  for (const relation of snapshot.curriculumRelations) {
+    if (sourceTuple(relation.provenance) !== expectedSource) throw new Error(`Mixed curriculum source provenance: ${relation.id}`);
+  }
+  const graphCourseIds = new Set(snapshot.curriculumRelations.map((relation) => relation.courseId));
+  for (const course of snapshot.courses) {
+    if (graphCourseIds.has(course.id) && sourceTuple(course.provenance) !== expectedSource) throw new Error(`Mixed curriculum source provenance: ${course.id}`);
+  }
+"""
+if text.count(old) != 1:
+    raise SystemExit('expected provenance block not found exactly once')
+text = text.replace(old, new)
+old = """function assertInsertionOnlyEvolution(previous: CurriculumGraph, current: CurriculumGraph): void {
+  const currentIds = new Set(current.nodes.map((node) => node.id));
+  for (const node of previous.nodes) if (!currentIds.has(node.id)) throw new Error(`Insertion-only history removed node: ${node.id}`);
+}
+"""
+new = """function assertInsertionOnlyEvolution(previous: CurriculumGraph, current: CurriculumGraph): void {
+  const currentNodes = new Map(current.nodes.map((node) => [node.id, node] as const));
+  for (const node of previous.nodes) {
+    const retained = currentNodes.get(node.id);
+    if (retained === undefined) throw new Error(`Insertion-only history removed node: ${node.id}`);
+    if (canonicalize(retained) !== canonicalize(node)) throw new Error(`Insertion-only history changed node: ${node.id}`);
+  }
+
+  const currentEdges = new Map(current.edges.map((edge) => [edge.id, edge] as const));
+  for (const edge of previous.edges) {
+    const retained = currentEdges.get(edge.id);
+    if (retained === undefined) throw new Error(`Insertion-only history removed edge: ${edge.id}`);
+    if (canonicalize(retained) !== canonicalize(edge)) throw new Error(`Insertion-only history changed edge: ${edge.id}`);
+  }
+
+  const currentAnomalies = new Map(current.anomalies.map((anomaly) => [anomaly.id, anomaly] as const));
+  for (const anomaly of previous.anomalies) {
+    const retained = currentAnomalies.get(anomaly.id);
+    if (retained === undefined) throw new Error(`Insertion-only history removed anomaly: ${anomaly.id}`);
+    if (canonicalize(retained) !== canonicalize(anomaly)) throw new Error(`Insertion-only history changed anomaly: ${anomaly.id}`);
+  }
+}
+"""
+if text.count(old) != 1:
+    raise SystemExit('expected insertion-only block not found exactly once')
+compiler.write_text(text.replace(old, new))
+
+tests = Path('tests/curriculum-compiler.test.ts')
+text = tests.read_text()
+old = "import assert from 'node:assert/strict';\n"
+new = "import assert from 'node:assert/strict';\nimport { createHash } from 'node:crypto';\n"
+if text.count(old) != 1:
+    raise SystemExit('expected test import not found exactly once')
+text = text.replace(old, new)
+old = """  const mixed: readonly CurriculumRelation[] = snapshot.curriculumRelations.map((relation, index) => index === 0 ? { ...relation, provenance: { ...relation.provenance, snapshotId: 'snapshot:other' } } : relation);
+  assert.throws(() => compileBuuCurriculum({ ...snapshot, curriculumRelations: mixed }), /Mixed curriculum source provenance/);
+});
+"""
+new = """  const mixed: readonly CurriculumRelation[] = snapshot.curriculumRelations.map((relation, index) => index === 0 ? { ...relation, provenance: { ...relation.provenance, snapshotId: 'snapshot:other' } } : relation);
+  assert.throws(() => compileBuuCurriculum({ ...snapshot, curriculumRelations: mixed }), /Mixed curriculum source provenance/);
+
+  const mixedCourse: Course = { ...snapshot.courses[0]!, provenance: { ...snapshot.courses[0]!.provenance, snapshotId: 'snapshot:other' } };
+  assert.throws(() => compileBuuCurriculum({ ...snapshot, courses: [mixedCourse, ...snapshot.courses.slice(1)] }), /Mixed curriculum source provenance/);
+});
+"""
+if text.count(old) != 1:
+    raise SystemExit('expected mixed provenance block not found exactly once')
+text = text.replace(old, new)
+old = """  const changedGraph = replacePrevious(baseline, { graph: { ...baseline.graph, nodes: baseline.graph.nodes.map((node, index) => index === 0 ? { ...node, label: `${node.label} tampered` } : node) } });
+  assert.throws(() => compileBuuCurriculum(snapshot, changedGraph), /hash mismatch/);
+
+  const movedAnchor = replacePrevious(baseline, { anchorManifest: { ...baseline.anchorManifest, anchors: baseline.anchorManifest.anchors.map((anchor, index) => index === 0 ? { ...anchor, position: { ...anchor.position, x: anchor.position.x + 1 } } : anchor) } });
+"""
+new = """  const changedGraph = replacePrevious(baseline, { graph: { ...baseline.graph, nodes: baseline.graph.nodes.map((node, index) => index === 0 ? { ...node, label: `${node.label} tampered` } : node) } });
+  assert.throws(() => compileBuuCurriculum(snapshot, changedGraph), /hash mismatch/);
+
+  const coordinatedGraph = { ...baseline.graph, nodes: baseline.graph.nodes.map((node, index) => index === 0 ? { ...node, label: `${node.label} tampered` } : node) };
+  const coordinatedHash = `sha256:${createHash('sha256').update(canonicalize(coordinatedGraph)).digest('hex')}` as const;
+  const coordinatedNodeTampering = replacePrevious(baseline, {
+    graph: coordinatedGraph,
+    anchorManifest: { ...baseline.anchorManifest, graphHash: coordinatedHash },
+    routeManifest: { ...baseline.routeManifest, graphHash: coordinatedHash }
+  });
+  assert.throws(() => compileBuuCurriculum(snapshot, coordinatedNodeTampering), /changed node/);
+
+  const coordinatedEdgeGraph = { ...baseline.graph, edges: baseline.graph.edges.map((edge, index) => index === 0 ? { ...edge, provenance: { ...edge.provenance, locator: `${edge.provenance.locator}#tampered` } } : edge) };
+  const coordinatedEdgeHash = `sha256:${createHash('sha256').update(canonicalize(coordinatedEdgeGraph)).digest('hex')}` as const;
+  const coordinatedEdgeTampering = replacePrevious(baseline, {
+    graph: coordinatedEdgeGraph,
+    anchorManifest: { ...baseline.anchorManifest, graphHash: coordinatedEdgeHash },
+    routeManifest: { ...baseline.routeManifest, graphHash: coordinatedEdgeHash }
+  });
+  assert.throws(() => compileBuuCurriculum(snapshot, coordinatedEdgeTampering), /changed edge/);
+
+  const movedAnchor = replacePrevious(baseline, { anchorManifest: { ...baseline.anchorManifest, anchors: baseline.anchorManifest.anchors.map((anchor, index) => index === 0 ? { ...anchor, position: { ...anchor.position, x: anchor.position.x + 1 } } : anchor) } });
+"""
+if text.count(old) != 1:
+    raise SystemExit('expected previous graph test block not found exactly once')
+tests.write_text(text.replace(old, new))
