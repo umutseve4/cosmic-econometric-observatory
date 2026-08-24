@@ -13,8 +13,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        code: [2322, 2345]
-        range: [050-074, 075-099, 100-124, 125-149]
+        include:
+          - { code: 2322, range: 075-084 }
+          - { code: 2322, range: 085-094 }
+          - { code: 2322, range: 095-104 }
+          - { code: 2322, range: 105-114 }
+          - { code: 2322, range: 115-124 }
+          - { code: 2345, range: 100-104 }
+          - { code: 2345, range: 105-109 }
+          - { code: 2345, range: 110-114 }
+          - { code: 2345, range: 115-119 }
+          - { code: 2345, range: 120-124 }
     name: locate-TS${{ matrix.code }}-${{ matrix.range }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
