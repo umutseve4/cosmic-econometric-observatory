@@ -11,12 +11,14 @@ function sort(value: unknown): unknown {
 }
 
 export function compareCodePoints(a: string, b: string): number {
-  const aa = [...a].map((c) => c.codePointAt(0) ?? 0);
-  const bb = [...b].map((c) => c.codePointAt(0) ?? 0);
+  const aa = [...a].map((character) => character.codePointAt(0) ?? 0);
+  const bb = [...b].map((character) => character.codePointAt(0) ?? 0);
   for (let index = 0; index < Math.max(aa.length, bb.length); index += 1) {
-    if (aa[index] === undefined) return -1;
-    if (bb[index] === undefined) return 1;
-    if (aa[index] !== bb[index]) return aa[index] - bb[index];
+    const left = aa[index];
+    const right = bb[index];
+    if (left === undefined) return -1;
+    if (right === undefined) return 1;
+    if (left !== right) return left - right;
   }
   return 0;
 }
