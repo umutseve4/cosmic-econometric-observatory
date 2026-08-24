@@ -1,48 +1,22 @@
-name: M2a source repair
+name: CI
 
 on:
   push:
-    branches: [feat/m2a-curriculum-graph-core]
+    branches: [main]
+  pull_request:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  repair:
+  verify:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          ref: feat/m2a-curriculum-graph-core
-      - name: Apply minimal contextual-typing fix
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          source_path = Path("src/curriculum-compiler.ts")
-          lines = source_path.read_text().splitlines()
-          output = []
-          node_count = 0
-          edge_count = 0
-          for line in lines:
-              indent = line[:len(line) - len(line.lstrip())]
-              if line.strip() == "].sort(compareNodes);":
-                  output.extend([f"{indent}];", f"{indent}nodes.sort(compareNodes);"])
-                  node_count += 1
-              elif line.strip() == "].sort((a, b) => compareCodePoints(a.id, b.id));":
-                  output.extend([f"{indent}];", f"{indent}edges.sort((a, b) => compareCodePoints(a.id, b.id));"])
-                  edge_count += 1
-              else:
-                  output.append(line)
-          if (node_count, edge_count) != (1, 1):
-              raise SystemExit(f"unexpected replacement counts: nodes={node_count}, edges={edge_count}")
-          source_path.write_text("\n".join(output) + "\n")
-          PY
-          git diff --check
-          test "$(git diff --name-only)" = "src/curriculum-compiler.ts"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/curriculum-compiler.ts
-          git commit -m "fix: preserve M2a contextual typing"
-          git push origin HEAD:feat/m2a-curriculum-graph-core
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run verify
