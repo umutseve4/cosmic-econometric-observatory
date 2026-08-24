@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { importBuuSnapshot, parseBuuCurriculumTsv, validateRecord } from '../src/index.js';
+import { importBuuSnapshot, parseBuuCurriculumTsv, validateBuuSnapshotReferences, validateRecord } from '../src/index.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const fixture = join(root, 'vendor/legacy/eko-rasathane/db8d52f0b29d712c34e8b7487e2299ce9f75c266');
@@ -12,7 +12,7 @@ const offeringText = readFileSync(join(fixture, 'offerings.json'), 'utf8');
 const rawOfferings: unknown = JSON.parse(offeringText);
 const snapshot = importBuuSnapshot(curriculum, rawOfferings);
 
-const expectedAnomalyProjection: [string, string, string, string[]][] = [
+const expectedAnomalyProjection: (readonly [string, string, string, readonly string[]])[] = [
   ['offering-2025-2026-spring-2025-2026-spring-10-feb-049', 'mapped-with-anomaly', 'title-semester-type-with-printed-code-mismatch', ['offering-printed-code-mismatch:offering-2025-2026-spring-2025-2026-spring-10-feb-049', 'anomaly-duplicate-course-buu-ay33-s6-elective-ikt3306-1']],
   ['offering-2025-2026-spring-2025-2026-spring-10-feb-050', 'mapped-with-anomaly', 'title-semester-type-with-printed-code-mismatch', ['offering-printed-code-mismatch:offering-2025-2026-spring-2025-2026-spring-10-feb-050', 'anomaly-duplicate-course-buu-ay33-s6-elective-ikt3306-1']],
   ['offering-2025-2026-spring-2025-2026-spring-10-feb-226', 'mapped-with-anomaly', 'title-semester-type-with-printed-code-mismatch', ['offering-printed-code-mismatch:offering-2025-2026-spring-2025-2026-spring-10-feb-226']],
@@ -48,8 +48,25 @@ test('all domain records pass strict contracts and references are complete', () 
 test('complete anomaly projection remains byte-for-byte explicit', () => {
   const actual = snapshot.reconciliations
     .filter((row) => row.anomalyRefs.length > 0)
-    .map((row): [string, string, string, string[]] => [row.offeringId, row.status, row.reason, row.anomalyRefs]);
+    .map((row): readonly [string, string, string, readonly string[]] => [row.offeringId, row.status, row.reason, row.anomalyRefs]);
   assert.deepEqual(actual, expectedAnomalyProjection);
+});
+
+test('rejects a dangling reconciliation offering reference', () => {
+  const reconciliations = snapshot.reconciliations.map((row, index) => index === 0 ? { ...row, offeringId: 'missing-offering' } : row);
+  assert.throws(() => validateBuuSnapshotReferences({ ...snapshot, reconciliations }), /Dangling reference/);
+});
+
+test('rejects a dangling reconciliation candidate relation reference', () => {
+  const reconciliations = snapshot.reconciliations.map((row, index) => index === 0 ? { ...row, candidateCurriculumRelationIds: ['missing-relation'] } : row);
+  assert.throws(() => validateBuuSnapshotReferences({ ...snapshot, reconciliations }), /Dangling reference/);
+});
+
+test('rejects a dangling reconciliation anomaly reference', () => {
+  const target = snapshot.reconciliations.findIndex((row) => row.anomalyRefs.length > 0);
+  assert.notEqual(target, -1);
+  const reconciliations = snapshot.reconciliations.map((row, index) => index === target ? { ...row, anomalyRefs: ['missing-anomaly'] } : row);
+  assert.throws(() => validateBuuSnapshotReferences({ ...snapshot, reconciliations }), /Dangling reference/);
 });
 
 test('source anomalies remain literal and duplicate rows remain distinct', () => {

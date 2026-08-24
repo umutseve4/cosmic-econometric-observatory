@@ -106,7 +106,7 @@ export function importBuuSnapshot(curriculumTsv: string, inputOfferings: unknown
   });
   const courses = [...catalog.map((entry) => entry.course), ...unresolved.values()];
   const relations = catalog.map((entry) => entry.relation);
-  validateReferences(courses, relations, offerings, reconciliations, anomalies);
+  validateBuuSnapshotReferences({ courses, curriculumRelations: relations, offerings, reconciliations, anomalies });
   const summary = {
     relations: relations.length, required: rows.filter((x) => x.courseType === 'required').length, elective: rows.filter((x) => x.courseType === 'elective').length,
     offerings: rawOfferings.length, spring: rawOfferings.filter((x) => x.term === 'spring').length, fall: rawOfferings.filter((x) => x.term === 'fall').length,
@@ -159,9 +159,16 @@ function validateRawOfferings(input: unknown): RawOffering[] {
   }
   return input as RawOffering[];
 }
-function validateReferences(courses: Course[], relations: CurriculumRelation[], offerings: Offering[], reconciliations: Reconciliation[], anomalies: Anomaly[]): void {
-  const unique = (ids: string[], label: string): Set<string> => { const set = new Set(ids); if (set.size !== ids.length) throw new Error(`Duplicate ${label} id`); return set; };
+export function validateBuuSnapshotReferences(snapshot: Pick<BuuSnapshot, 'courses' | 'curriculumRelations' | 'offerings' | 'reconciliations' | 'anomalies'>): void {
+  const { courses, curriculumRelations: relations, offerings, reconciliations, anomalies } = snapshot;
+  const unique = (ids: readonly string[], label: string): Set<string> => { const set = new Set(ids); if (set.size !== ids.length) throw new Error(`Duplicate ${label} id`); return set; };
   const courseIds = unique(courses.map((x) => x.id), 'course'), relationIds = unique(relations.map((x) => x.id), 'relation');
-  unique(offerings.map((x) => x.id), 'offering'); unique(anomalies.map((x) => x.id), 'anomaly');
-  if (relations.some((x) => !courseIds.has(x.courseId)) || offerings.some((x) => !courseIds.has(x.courseId)) || reconciliations.some((x) => x.canonicalCurriculumRelationId !== null && !relationIds.has(x.canonicalCurriculumRelationId))) throw new Error('Dangling reference');
+  const offeringIds = unique(offerings.map((x) => x.id), 'offering'), anomalyIds = unique(anomalies.map((x) => x.id), 'anomaly');
+  const danglingReconciliation = reconciliations.some((row) =>
+    !offeringIds.has(row.offeringId) ||
+    (row.canonicalCurriculumRelationId !== null && !relationIds.has(row.canonicalCurriculumRelationId)) ||
+    row.candidateCurriculumRelationIds.some((id) => !relationIds.has(id)) ||
+    row.anomalyRefs.some((id) => !anomalyIds.has(id))
+  );
+  if (relations.some((x) => !courseIds.has(x.courseId)) || offerings.some((x) => !courseIds.has(x.courseId)) || danglingReconciliation) throw new Error('Dangling reference');
 }
