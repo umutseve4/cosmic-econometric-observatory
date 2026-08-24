@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "m0BaseSha": "9d481cec439b99cd590e267cc0995c34e8036b36",
+  "materializerSha256": "afbc3899dfc08effc58c04b65244fd180a2dbfa3d90dcaf104f997ccf30a20d1",
+  "legacy": {
+    "repository": "umutseve4/eko-rasathane",
+    "commit": "db8d52f0b29d712c34e8b7487e2299ce9f75c266"
+  },
+  "curriculum": {
+    "sourcePath": "evidence/program-343-ay33.rows.tsv",
+    "sourceGitBlobSha": "f3336e870287db5cb14e978845ec2474c0be852f",
+    "bytes": 15062,
+    "sha256": "1a3fb51034a6dcb88cc8f2680cbe560dbfc971be011e1d854d09839b3e289454",
+    "relationCount": 144,
+    "requiredCount": 41,
+    "electiveCount": 103,
+    "academicYear": "2025-2026",
+    "sourceUrl": "https://bilgipaketi.uludag.edu.tr/Programlar/Detay/343?AyID=33",
+    "accessedAt": "2026-08-23T19:03:28Z",
+    "httpStatus": 200,
+    "rawHtmlBytes": 108070,
+    "rawHtmlSha256": "0b72d3ba7919492cce571d697902dff1ca20d6e0ef67dcbdf3f53f5b6acee1c6"
+  },
+  "timetable": {
+    "sourcePath": "data/timetable.mjs",
+    "sourceGitBlobSha": "bdcf2276edd98c33eddb3ccd2c9b71e962293a61",
+    "sourceBytes": 14637,
+    "sourceSha256": "9231d013e3cbbfb24e3ca463582c47cb42e40c2660aaad9b58a3da0afd64f87b",
+    "payloadGzipBytes": 9979,
+    "payloadGzipSha256": "522b3f9d911fe63a929605c6a910e9f86b4f423334c1dbc9dd84ce5afc1bda53",
+    "decodedPayloadBytes": 114757,
+    "decodedPayloadSha256": "7b778d4e7ba9615f4d927d259e59955d27f803ff2d9989927a4e4c0fd554954e",
+    "generatedBytes": 140223,
+    "generatedSha256": "701d88adf6c24c0ae4a3e9cc3db98a225b8e9634164c0351bb5dd39fccbd3ca2",
+    "offeringCount": 164,
+    "termCounts": {
+      "fall": 81,
+      "spring": 83
+    },
+    "educationTypeCounts": {
+      "first": 108,
+      "second": 56
+    },
+    "snapshots": [
+      {
+        "id": "2025-2026-spring-10-feb",
+        "extractionSha256": "616ae40aa873a90a75938ca6900f05f1977c8b07b0660d2e4a93b6a275cc252a",
+        "physicalRecordStarts": 490,
+        "acceptedSourceRows": 490,
+        "excludedPhysicalOrdinals": []
+      },
+      {
+        "id": "2025-2026-fall-19-sep",
+        "extractionSha256": "3e2a5c79fd6faaeb3fbc5796ff14ce348ecc2b6bc0423a609014f4cd6aa637ba",
+        "physicalRecordStarts": 514,
+        "acceptedSourceRows": 512,
+        "excludedPhysicalOrdinals": [
+          503,
+          505
+        ]
+      }
+    ]
+  }
+}
