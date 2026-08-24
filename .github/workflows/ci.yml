@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 jobs:
   verify:
@@ -19,4 +20,24 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: npm run verify
+      - name: Verify
+        shell: bash
+        run: |
+          set +e
+          npm run verify 2>&1 | tee verify.log
+          status=${PIPESTATUS[0]}
+          exit "$status"
+      - name: Publish failure diagnostics
+        if: failure() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          {
+            echo '<!-- ci-verification-diagnostics -->'
+            echo '### CI verification failure'
+            echo '```text'
+            tail -n 160 verify.log
+            echo '```'
+          } > verify-comment.md
+          gh pr comment "$PR_NUMBER" --body-file verify-comment.md
