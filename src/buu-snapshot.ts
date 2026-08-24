@@ -59,7 +59,7 @@ export function importBuuSnapshot(curriculumTsv: string, inputOfferings: unknown
     const ordinal = (seen.get(row.courseCode) ?? 0) + 1;
     seen.set(row.courseCode, ordinal);
     const duplicate = (counts.get(row.courseCode) ?? 0) > 1;
-    const courseId = `course-buu-ay33-s${row.semester}-${row.courseType}-${row.courseCode.toLocaleLowerCase('tr-TR')}${duplicate ? `-${ordinal}` : ''}`;
+    const courseId = `course-buu-ay33-s${row.semester}-${row.courseType}-${row.courseCode.toLowerCase()}${duplicate ? `-${ordinal}` : ''}`;
     const anomalyRefs: string[] = [];
     if (duplicate) {
       const id = `anomaly-duplicate-${courseId}`;
