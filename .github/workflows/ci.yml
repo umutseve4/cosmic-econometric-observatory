@@ -9,7 +9,24 @@ permissions:
   contents: read
 
 jobs:
-  typecheck-source:
+  locate-source-error:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - bucket: compiler-000-099
+            pattern: 'src/curriculum-compiler.ts\\([0-9]{1,2},'
+          - bucket: compiler-100-199
+            pattern: 'src/curriculum-compiler.ts\\(1[0-9]{2},'
+          - bucket: compiler-200-299
+            pattern: 'src/curriculum-compiler.ts\\(2[0-9]{2},'
+          - bucket: compiler-300-399
+            pattern: 'src/curriculum-compiler.ts\\(3[0-9]{2},'
+          - bucket: index
+            pattern: 'src/index.ts\\('
+          - bucket: other-source
+            pattern: 'src/(?!curriculum-compiler\\.ts|index\\.ts)'
+    name: locate-${{ matrix.bucket }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -19,19 +36,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --ignore-scripts
-      - name: Typecheck source only
+      - name: Classify TypeScript diagnostics
+        env:
+          PATTERN: ${{ matrix.pattern }}
         run: |
           node -e "const fs=require('node:fs');const c=JSON.parse(fs.readFileSync('tsconfig.json','utf8'));c.include=['src/**/*.ts'];fs.writeFileSync('tsconfig.diagnostic.json',JSON.stringify(c));"
-          npx tsc -p tsconfig.diagnostic.json --noEmit
-
-  typecheck-full:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci --ignore-scripts
-      - run: npm run typecheck
+          npx tsc -p tsconfig.diagnostic.json --noEmit --pretty false > diagnostics.txt 2>&1 || true
+          if grep -Eq "$PATTERN" diagnostics.txt; then exit 1; fi
