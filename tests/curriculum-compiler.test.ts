@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { BuuSnapshot, Course, CurriculumCompilation, CurriculumRelation } from '../src/index.js';
+import type { Anomaly, BuuSnapshot, Course, CurriculumCompilation, CurriculumRelation } from '../src/index.js';
 import { canonicalCompilation, canonicalize, compileBuuCurriculum, importBuuSnapshot } from '../src/index.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -87,25 +87,25 @@ test('duplicate, dangling and malformed provenance inputs are fatal', () => {
   assert.throws(() => compileBuuCurriculum({ ...snapshot, courses: [...snapshot.courses, snapshot.courses[0]!] }), /Duplicate course/);
   assert.throws(() => compileBuuCurriculum({ ...snapshot, curriculumRelations: snapshot.curriculumRelations.map((relation, index) => index === 0 ? { ...relation, courseId: 'missing-course' } : relation) }), /Dangling reference/);
 
-  const badHash = { ...snapshot.courses[0]!, provenance: { ...snapshot.courses[0]!.provenance, contentHash: 'sha256:bad' as `sha256:${string}` } };
+  const badHash: Course = { ...snapshot.courses[0]!, provenance: { ...snapshot.courses[0]!.provenance, contentHash: 'sha256:bad' } };
   assert.throws(() => compileBuuCurriculum({ ...snapshot, courses: [badHash, ...snapshot.courses.slice(1)] }), /Invalid provenance hash/);
 
-  const emptySource = snapshot.curriculumRelations.map((relation, index) => index === 0 ? { ...relation, provenance: { ...relation.provenance, sourceId: '' } } : relation);
+  const emptySource: readonly CurriculumRelation[] = snapshot.curriculumRelations.map((relation, index) => index === 0 ? { ...relation, provenance: { ...relation.provenance, sourceId: '' } } : relation);
   assert.throws(() => compileBuuCurriculum({ ...snapshot, curriculumRelations: emptySource }), /Incomplete provenance/);
 
-  const badTime = snapshot.curriculumRelations.map((relation, index) => index === 0 ? { ...relation, provenance: { ...relation.provenance, observedAt: 'not-a-date' } } : relation);
+  const badTime: readonly CurriculumRelation[] = snapshot.curriculumRelations.map((relation, index) => index === 0 ? { ...relation, provenance: { ...relation.provenance, observedAt: 'not-a-date' } } : relation);
   assert.throws(() => compileBuuCurriculum({ ...snapshot, curriculumRelations: badTime }), /Invalid provenance timestamp/);
 
-  const mixed = snapshot.curriculumRelations.map((relation, index) => index === 0 ? { ...relation, provenance: { ...relation.provenance, snapshotId: 'snapshot:other' } } : relation);
+  const mixed: readonly CurriculumRelation[] = snapshot.curriculumRelations.map((relation, index) => index === 0 ? { ...relation, provenance: { ...relation.provenance, snapshotId: 'snapshot:other' } } : relation);
   assert.throws(() => compileBuuCurriculum({ ...snapshot, curriculumRelations: mixed }), /Mixed curriculum source provenance/);
 });
 
 test('dangling anomaly references are fatal while known out-of-domain offering anomalies are excluded', () => {
   const baseAnomaly = snapshot.anomalies[0]!;
-  const dangling = { ...baseAnomaly, id: 'anomaly:test-dangling', entityRefs: ['missing-entity'] };
+  const dangling: Anomaly = { ...baseAnomaly, id: 'anomaly:test-dangling', entityRefs: ['missing-entity'] };
   assert.throws(() => compileBuuCurriculum({ ...snapshot, anomalies: [...snapshot.anomalies, dangling] }), /Dangling anomaly reference/);
 
-  const offeringOnly = { ...baseAnomaly, id: 'anomaly:test-offering-only', entityRefs: [snapshot.offerings[0]!.id] };
+  const offeringOnly: Anomaly = { ...baseAnomaly, id: 'anomaly:test-offering-only', entityRefs: [snapshot.offerings[0]!.id] };
   const result = compileBuuCurriculum({ ...snapshot, anomalies: [...snapshot.anomalies, offeringOnly] });
   assert.equal(result.graph.anomalies.some((anomaly) => anomaly.id === offeringOnly.id), false);
 });
@@ -133,7 +133,6 @@ test('missing or tampered previous graph, anchor and route history is fatal', ()
 });
 
 test('insertion-only history rejects removal of a previously compiled node', () => {
-  const expanded = expandedSnapshot();
-  const expandedCompilation = compileBuuCurriculum(expanded);
+  const expandedCompilation = compileBuuCurriculum(expandedSnapshot());
   assert.throws(() => compileBuuCurriculum(snapshot, expandedCompilation), /removed node/);
 });
