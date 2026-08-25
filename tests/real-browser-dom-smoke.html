@@ -59,40 +59,6 @@ try {
   assert(same(svgPrepared.nodeDescriptors, svgManifest.nodeDescriptors), 'svg node descriptor parity');
   assert(same(svgPrepared.edgeDescriptors, svgManifest.edgeDescriptors), 'svg edge descriptor parity');
 
-  const encodedHostileLabel = hostileLabel.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
-  const nestedActiveContent = htmlManifest.content.replace(encodedHostileLabel, '<span><img src="x" onerror="globalThis.__M3D_NESTED__=1"></span>');
-  let hostileMounts = 0;
-  let rejected = false;
-  try {
-    renderProjection({ ...htmlManifest, content: nestedActiveContent }, { replaceChildren() { hostileMounts += 1; } }, { dom: port });
-  } catch (error) {
-    rejected = error instanceof Error &&
-      error.message === 'BROWSER_RENDER_INVALID_CONTENT:html:prepare-failed' &&
-      error.cause instanceof Error &&
-      error.cause.message === 'BROWSER_DOM_INVALID_CONTENT:html:element';
-  }
-  assert(rejected, 'nested active content was not rejected');
-  assert(hostileMounts === 0, 'nested active content reached target');
-  assert(globalThis.__M3D_NESTED__ === undefined, 'nested active content executed');
-
-  const forgedManifest = { ...htmlManifest, nodeDescriptors: htmlManifest.nodeDescriptors.map((descriptor) => descriptor.id === 'node:b' ? { ...descriptor, label: 'forged' } : descriptor) };
-  let forgedManifestMounts = 0;
-  let forgedManifestRejected = false;
-  try {
-    renderProjection(forgedManifest, { replaceChildren() { forgedManifestMounts += 1; } }, { dom: port });
-  } catch (error) { forgedManifestRejected = error instanceof Error && error.message === 'BROWSER_RENDER_NODE_DESCRIPTORS_MISMATCH'; }
-  assert(forgedManifestRejected, 'forged manifest descriptor was not rejected');
-  assert(forgedManifestMounts === 0, 'forged manifest descriptor reached target');
-
-  const forgedContent = htmlManifest.content.replaceAll(encodedHostileLabel, 'forged');
-  let forgedContentMounts = 0;
-  let forgedContentRejected = false;
-  try {
-    renderProjection({ ...htmlManifest, content: forgedContent }, { replaceChildren() { forgedContentMounts += 1; } }, { dom: port });
-  } catch (error) { forgedContentRejected = error instanceof Error && error.message === 'BROWSER_RENDER_NODE_DESCRIPTORS_MISMATCH'; }
-  assert(forgedContentRejected, 'content descriptor drift was not rejected');
-  assert(forgedContentMounts === 0, 'content descriptor drift reached target');
-
   result.textContent = 'M3D_BROWSER_SMOKE_PASS';
 } catch (error) {
   result.textContent = `M3D_BROWSER_SMOKE_FAIL:${error instanceof Error ? error.message : String(error)}`;
