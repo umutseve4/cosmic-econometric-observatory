@@ -58,3 +58,25 @@ test('passes only a rebuilt allow-listed canonical DTO to the Three port',()=>{
   assert.deepEqual(captured,expected);
   assert.equal(targetCalls,1);
 });
+
+test('rebuilds Three payload with isolated nested position and capabilities references',()=>{
+  const base=project(scene,'three');
+  const nativeParse=JSON.parse;
+  const parsed=nativeParse(base.content) as MutableThreePayload;
+  let captured:unknown;
+  JSON.parse=((_text:string)=>parsed) as typeof JSON.parse;
+  try {
+    renderProjection(base,{replaceChildren(){}},{dom:{prepareHtml(){throw new Error('unused');},prepareSvg(){throw new Error('unused');}},three:{prepareThree(value){captured=value;return prepared(base);}}});
+  } finally {
+    JSON.parse=nativeParse;
+  }
+  const canonical=captured as MutableThreePayload;
+  assert.notStrictEqual(canonical,parsed);
+  assert.notStrictEqual(canonical.nodes,parsed.nodes);
+  assert.notStrictEqual(canonical.nodes[0],parsed.nodes[0]);
+  assert.notStrictEqual(canonical.nodes[0]!.position,parsed.nodes[0]!.position);
+  assert.notStrictEqual(canonical.nodes[0]!.capabilities,parsed.nodes[0]!.capabilities);
+  assert.notStrictEqual(canonical.edges,parsed.edges);
+  assert.notStrictEqual(canonical.edges[0],parsed.edges[0]);
+  assert.deepEqual(canonical,nativeParse(base.content));
+});
