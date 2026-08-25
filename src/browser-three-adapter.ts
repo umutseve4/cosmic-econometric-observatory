@@ -54,29 +54,30 @@ export function createBrowserThreePort(
         canvas.setAttribute('aria-hidden', 'true');
         canvas.dataset.projection = 'three';
         const scene = new runtime.Scene();
-        const nodeObjects = new Map<string, Object3DLike>();
 
         for (const node of canonical.nodes) {
           const geometry = new runtime.SphereGeometry(0.16, 12, 8);
+          disposables.push(geometry);
           const material = new runtime.MeshBasicMaterial({ color: node.semanticKind === 'program' ? 0x4f8cff : 0x62d49b });
-          disposables.push(geometry, material);
+          disposables.push(material);
           const mesh = new runtime.Mesh(geometry, material);
           mesh.name = node.id;
           mesh.userData = Object.freeze({ id: node.id, semanticKind: node.semanticKind, label: node.label });
           mesh.position.set(node.position.x, node.position.y, node.position.z);
-          nodeObjects.set(node.id, mesh);
           scene.add(mesh);
         }
 
         for (const edge of canonical.edges) {
           const source = canonical.nodes.find(({ id }) => id === edge.source)!;
           const target = canonical.nodes.find(({ id }) => id === edge.target)!;
-          const geometry = new runtime.BufferGeometry().setFromPoints([
+          const geometry = new runtime.BufferGeometry();
+          disposables.push(geometry);
+          geometry.setFromPoints([
             new runtime.Vector3(source.position.x, source.position.y, source.position.z),
             new runtime.Vector3(target.position.x, target.position.y, target.position.z)
           ]);
           const material = new runtime.LineBasicMaterial({ color: 0x8b93a7 });
-          disposables.push(geometry, material);
+          disposables.push(material);
           const line = new runtime.Line(geometry, material);
           line.name = edge.id;
           line.userData = Object.freeze({ id: edge.id, semanticKind: edge.semanticKind, source: edge.source, target: edge.target });
