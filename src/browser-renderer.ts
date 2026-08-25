@@ -150,28 +150,34 @@ function parseAndValidateThreePayload(manifest: ProjectionManifestV2): unknown {
   if (new Set(nodeIdsUnsorted).size !== nodeIdsUnsorted.length || new Set(focusOrders).size !== focusOrders.length) {
     throw new Error('BROWSER_RENDER_INVALID_CONTENT:three:nodes');
   }
+  const nodeIds = [...nodeIdsUnsorted].sort(compareCodePoints);
+  const focusOrderNodeIds = [...nodes]
+    .sort((left, right) => ((left as Record<string, unknown>).focusOrder as number) - ((right as Record<string, unknown>).focusOrder as number))
+    .map((node) => (node as Record<string, unknown>).id as string);
+  if (!sameStrings(nodeIds, manifest.nodeIds)) throw new Error('BROWSER_RENDER_NODE_IDS_MISMATCH');
+  if (!sameStrings(focusOrderNodeIds, manifest.focusOrderNodeIds)) throw new Error('BROWSER_RENDER_FOCUS_ORDER_MISMATCH');
+
   const nodeSet = new Set(nodeIdsUnsorted);
-  if (edges.some((edge) => !isRecord(edge)
-    || typeof edge.id !== 'string'
-    || typeof edge.source !== 'string'
-    || typeof edge.target !== 'string'
-    || !nodeSet.has(edge.source)
-    || !nodeSet.has(edge.target))) {
+  if (edges.some((edge) => !isValidThreeEdge(edge, nodeSet))) {
     throw new Error('BROWSER_RENDER_INVALID_CONTENT:three:edges');
   }
   const edgeIdsUnsorted = edges.map((edge) => (edge as Record<string, unknown>).id as string);
   if (new Set(edgeIdsUnsorted).size !== edgeIdsUnsorted.length) {
     throw new Error('BROWSER_RENDER_INVALID_CONTENT:three:edges');
   }
-  const nodeIds = [...nodeIdsUnsorted].sort(compareCodePoints);
   const edgeIds = [...edgeIdsUnsorted].sort(compareCodePoints);
-  const focusOrderNodeIds = [...nodes]
-    .sort((left, right) => ((left as Record<string, unknown>).focusOrder as number) - ((right as Record<string, unknown>).focusOrder as number))
-    .map((node) => (node as Record<string, unknown>).id as string);
-  if (!sameStrings(nodeIds, manifest.nodeIds)) throw new Error('BROWSER_RENDER_NODE_IDS_MISMATCH');
   if (!sameStrings(edgeIds, manifest.edgeIds)) throw new Error('BROWSER_RENDER_EDGE_IDS_MISMATCH');
-  if (!sameStrings(focusOrderNodeIds, manifest.focusOrderNodeIds)) throw new Error('BROWSER_RENDER_FOCUS_ORDER_MISMATCH');
   return payload;
+}
+
+function isValidThreeEdge(edge: unknown, nodeSet: ReadonlySet<string>): boolean {
+  if (!isRecord(edge)) return false;
+  const { id, source, target } = edge;
+  return typeof id === 'string'
+    && typeof source === 'string'
+    && typeof target === 'string'
+    && nodeSet.has(source)
+    && nodeSet.has(target);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
