@@ -100,24 +100,23 @@ test('title-only evolution preserves the retained anchor and canonical URL', () 
   assert.equal(next.graph.nodes.find((node) => node.id === course.id)!.label, `${course.canonicalTitle} (Revised)`);
 });
 
-test('code-only evolution preserves identity routes and monotonically unions aliases', () => {
+test('title and additive code evolution preserve identity and derive cumulative aliases', () => {
   const baseline = compileBuuCurriculum(snapshot);
   const course = snapshot.courses.find((item) => item.codeAssignments[0]?.value === 'EKO3310')!;
+  const added = { value: 'EKO3310Y', validFrom: '2026-09-01' };
   const evolved: BuuSnapshot = {
     ...snapshot,
     courses: snapshot.courses.map((item) => item.id === course.id
-      ? { ...item, codeAssignments: [{ value: 'EKO3310Y', validFrom: '2026-09-01' }] }
+      ? { ...item, canonicalTitle: `${item.canonicalTitle} (Revised)`, codeAssignments: [...item.codeAssignments, added] }
       : item)
   };
   const next = compileBuuCurriculum(evolved, baseline);
-  const previousRoute = routeFor(baseline, course.id);
-  const nextRoute = routeFor(next, course.id);
-  const newAlias = `/v1/courses/eko3310y/${encodeURIComponent(course.id)}`;
+  const expectedAliases = [...course.codeAssignments, added]
+    .map((assignment) => `/v1/courses/${assignment.value.toLowerCase()}/${encodeURIComponent(course.id)}`)
+    .sort(compareCodePoints);
   assert.deepEqual(anchorFor(next, course.id), anchorFor(baseline, course.id));
-  assert.equal(nextRoute.canonicalUrl, previousRoute.canonicalUrl);
-  assert.ok(nextRoute.aliases.includes(previousRoute.aliases[0]!));
-  assert.ok(nextRoute.aliases.includes(newAlias));
-  assert.deepEqual(nextRoute.aliases, [...new Set([...previousRoute.aliases, newAlias])].sort(compareCodePoints));
+  assert.equal(routeFor(next, course.id).canonicalUrl, routeFor(baseline, course.id).canonicalUrl);
+  assert.deepEqual(routeFor(next, course.id).aliases, expectedAliases);
 });
 
 test('canonical routes use persistent IDs and human course codes are aliases only', () => {
@@ -211,6 +210,36 @@ test('missing or tampered previous graph, anchor and route history is fatal', ()
 
   const changedRoute = replacePrevious(baseline, { routeManifest: { ...baseline.routeManifest, routes: baseline.routeManifest.routes.map((route, index) => index === 0 ? { ...route, canonicalUrl: '/tampered' } : route) } });
   assert.throws(() => compileBuuCurriculum(snapshot, changedRoute), /route drift/);
+});
+
+test('previous routes must be the exact projection of previous assignment history', () => {
+  const baseline = compileBuuCurriculum(snapshot);
+  const course = snapshot.courses.find((item) => item.codeAssignments[0]?.value === 'EKO3310')!;
+  const routeIndex = baseline.routeManifest.routes.findIndex((route) => route.nodeId === course.id);
+  const original = baseline.routeManifest.routes[routeIndex]!;
+  const other = baseline.routeManifest.routes.find((route) => route.nodeId !== course.id && route.aliases.length > 0)!;
+  const variants = [
+    { ...original, aliases: [...original.aliases, `/v1/courses/forged/${encodeURIComponent(course.id)}`].sort(compareCodePoints) },
+    { ...original, aliases: [] },
+    { ...original, aliases: [original.aliases[0]!, original.aliases[0]!] },
+    { ...original, aliases: [`/v1/courses/z/${encodeURIComponent(course.id)}`, original.aliases[0]!] },
+    { ...original, aliases: [other.aliases[0]!] }
+  ];
+  for (const variant of variants) {
+    const tampered = replacePrevious(baseline, { routeManifest: { ...baseline.routeManifest, routes: baseline.routeManifest.routes.map((route, index) => index === routeIndex ? variant : route) } });
+    assert.throws(() => compileBuuCurriculum(snapshot, tampered), /Previous route drift/);
+  }
+});
+
+test('course assignment history is cumulative and prior records are immutable', () => {
+  const baseline = compileBuuCurriculum(snapshot);
+  const course = snapshot.courses.find((item) => item.codeAssignments[0]?.value === 'EKO3310')!;
+  const evolve = (codeAssignments: Course['codeAssignments']): BuuSnapshot => ({
+    ...snapshot,
+    courses: snapshot.courses.map((item) => item.id === course.id ? { ...item, codeAssignments } : item)
+  });
+  assert.throws(() => compileBuuCurriculum(evolve([]), baseline), /changed course assignment history/);
+  assert.throws(() => compileBuuCurriculum(evolve(course.codeAssignments.map((item) => ({ ...item, validTo: '2026-08-31' }))), baseline), /changed course assignment history/);
 });
 
 test('insertion-only history rejects removal of a previously compiled node', () => {

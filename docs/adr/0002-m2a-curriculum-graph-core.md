@@ -14,7 +14,7 @@ The compiler emits three canonical JSON-safe artifacts:
 2. `AnchorManifestV1` using `content-addressed-slots-v1`.
 3. `RouteManifestV1` with canonical `/v1/nodes/{persistent-id}` routes.
 
-Insertion-only evolution accepts a complete previous `CurriculumCompilation`, never a detached anchor manifest. The compiler recomputes the previous graph hash, requires both manifests to reference it, requires exact graph/anchor/route node-set parity, validates every prior coordinate and semantic route, and rejects removal of a prior node. Retained anchors and canonical `/v1/nodes/{persistent-id}` URLs remain stable. Course aliases form a monotonic, deterministic, code-point-sorted union of previous and current code assignments and are never deleted; only new nodes receive deterministic collision-resolved slots and routes. Hidden mutable allocation state is forbidden. Course-code routes are aliases and never identity.
+Insertion-only evolution accepts a complete previous `CurriculumCompilation`, never a detached anchor manifest. The compiler recomputes the previous graph hash, requires both manifests to reference it, requires exact graph/anchor/route node-set parity, validates every prior coordinate and semantic route, and rejects removal of a prior node. Retained anchors and canonical `/v1/nodes/{persistent-id}` URLs remain stable. Prior course-assignment records are immutable and cumulative, and course aliases are the exact deterministic projection of that cumulative history; only new nodes receive deterministic collision-resolved slots and routes. Hidden mutable allocation state is forbidden. Course-code routes are aliases and never identity.
 
 ## Safety and provenance gates
 
@@ -24,6 +24,8 @@ Insertion-only evolution accepts a complete previous `CurriculumCompilation`, ne
 - Curriculum anomalies whose references are wholly inside the compiled domain remain explicit.
 - The M1 snapshot is input-only; offerings and reconciliations are not compiled, repaired, or mutated.
 - Canonical output is independent of input order and locale.
+
+The graph hash and manifests establish internal consistency, not predecessor authenticity. The compiler validates append-only continuity relative to the supplied predecessor compilation. Authenticating that predecessor, or detecting a coordinated rewrite of the entire predecessor bundle, requires an external trust anchor such as a signed or immutable checkpoint and is outside M2a.
 
 ## Deliberate exclusions
 

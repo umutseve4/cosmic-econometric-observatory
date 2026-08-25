@@ -146,7 +146,7 @@ export function compileBuuCurriculum(snapshot: BuuSnapshot, previous?: Curriculu
   return {
     graph,
     anchorManifest: allocateAnchors(nodes, graphHash, previous?.anchorManifest),
-    routeManifest: compileRoutes(nodes, graphHash, previous?.routeManifest)
+    routeManifest: compileRoutes(nodes, graphHash)
   };
 }
 
@@ -214,6 +214,12 @@ function assertInsertionOnlyEvolution(previous: CurriculumGraph, current: Curric
   for (const node of previous.nodes) {
     const retained = currentNodes.get(node.id);
     if (retained === undefined) throw new Error(`Insertion-only history removed node: ${node.id}`);
+    if (node.kind === 'course') {
+      const retainedAssignments = new Set((retained.codeAssignments ?? []).map((assignment) => canonicalize(assignment)));
+      if ((node.codeAssignments ?? []).some((assignment) => !retainedAssignments.has(canonicalize(assignment)))) {
+        throw new Error(`Insertion-only history changed course assignment history: ${node.id}`);
+      }
+    }
     if (canonicalize(immutableNodeSemantics(retained)) !== canonicalize(immutableNodeSemantics(node))) throw new Error(`Insertion-only history changed node: ${node.id}`);
   }
 
@@ -269,18 +275,8 @@ function allocateAnchors(nodes: readonly CurriculumGraphNode[], graphHash: `sha2
   };
 }
 
-function compileRoutes(nodes: readonly CurriculumGraphNode[], graphHash: `sha256:${string}`, previous?: RouteManifestV1): RouteManifestV1 {
-  const retained = new Map(previous?.routes.map((route) => [route.nodeId, route] as const) ?? []);
-  const routes = [...nodes].sort(compareNodes).map((node): RouteEntry => {
-    const current = routeFor(node);
-    const prior = retained.get(node.id);
-    if (prior === undefined) return current;
-    return {
-      nodeId: node.id,
-      canonicalUrl: prior.canonicalUrl,
-      aliases: [...new Set([...prior.aliases, ...current.aliases])].sort(compareCodePoints)
-    };
-  });
+function compileRoutes(nodes: readonly CurriculumGraphNode[], graphHash: `sha256:${string}`): RouteManifestV1 {
+  const routes = [...nodes].sort(compareNodes).map(routeFor);
   assertUnique(routes.map((route) => route.canonicalUrl), 'canonical route');
   return { schemaVersion: ROUTE_SCHEMA_VERSION, compilerVersion: M2_COMPILER_VERSION, graphHash, routes };
 }
@@ -293,31 +289,7 @@ function routeFor(node: CurriculumGraphNode): RouteEntry {
 }
 
 function validatePreviousRoute(node: CurriculumGraphNode, route: RouteEntry): void {
-  const expected = routeFor(node);
-  const normalizedAliases = [...new Set(route.aliases)].sort(compareCodePoints);
-  const aliases = new Set(route.aliases);
-  const malformedAlias = node.kind === 'course'
-    ? route.aliases.some((alias) => !isCourseAliasForNode(alias, node.id))
-    : route.aliases.length > 0;
-  if (route.nodeId !== expected.nodeId || route.canonicalUrl !== expected.canonicalUrl ||
-      canonicalize(route.aliases) !== canonicalize(normalizedAliases) || malformedAlias ||
-      expected.aliases.some((alias) => !aliases.has(alias))) {
-    throw new Error(`Previous route drift: ${route.nodeId}`);
-  }
-}
-
-function isCourseAliasForNode(alias: string, nodeId: string): boolean {
-  const prefix = '/v1/courses/';
-  const suffix = `/${encodeURIComponent(nodeId)}`;
-  if (!alias.startsWith(prefix) || !alias.endsWith(suffix)) return false;
-  const encodedCode = alias.slice(prefix.length, alias.length - suffix.length);
-  if (encodedCode.length === 0 || encodedCode.includes('/')) return false;
-  try {
-    const code = decodeURIComponent(encodedCode);
-    return code.length > 0 && encodedCode === encodeURIComponent(code.toLowerCase());
-  } catch {
-    return false;
-  }
+  if (canonicalize(route) !== canonicalize(routeFor(node))) throw new Error(`Previous route drift: ${route.nodeId}`);
 }
 
 function immutableNodeSemantics(node: CurriculumGraphNode): object {
