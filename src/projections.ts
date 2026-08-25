@@ -23,11 +23,12 @@ export interface ProjectionManifestV2 extends ProjectionManifest {
 
 export function project(scene: SceneIR, projection: ProjectionKind): ProjectionManifestV2 {
   const focusOrderedNodes = validateAndOrderNodes(scene.nodes);
+  const orderedEdges = [...scene.edges].sort(byId);
   const nodeIds = scene.nodes.map((node) => node.id).sort(compareCodePoints);
-  const edgeIds = scene.edges.map((edge) => edge.id).sort(compareCodePoints);
+  const edgeIds = orderedEdges.map((edge) => edge.id);
   const focusOrderNodeIds = focusOrderedNodes.map((node) => node.id);
   const nodeDescriptors = scene.nodes.map(({ id, label, semanticKind }) => ({ id, label, kind: semanticKind })).sort(byId);
-  const edgeDescriptors = scene.edges.map(({ id, source, target }) => ({ id, source, target })).sort(byId);
+  const edgeDescriptors = orderedEdges.map(({ id, source, target }) => ({ id, source, target }));
   const common = { schemaVersion: '2.0.0' as const, projection, nodeIds, edgeIds, focusOrderNodeIds, nodeDescriptors, edgeDescriptors };
 
   if (projection === 'three') {
@@ -36,7 +37,7 @@ export function project(scene: SceneIR, projection: ProjectionKind): ProjectionM
       content: JSON.stringify({
         scene: scene.schemaVersion,
         nodes: focusOrderedNodes.map(({ id, semanticKind, label, position, focusOrder, capabilities }) => ({ id, semanticKind, label, position, focusOrder, capabilities })),
-        edges: scene.edges
+        edges: orderedEdges
       })
     };
   }
@@ -45,7 +46,7 @@ export function project(scene: SceneIR, projection: ProjectionKind): ProjectionM
     const nodes = focusOrderedNodes.map((node, index) =>
       `<g id="${escapeMarkup(node.id)}" role="listitem" tabindex="0" data-node-id="${escapeMarkup(node.id)}" data-semantic-kind="${escapeMarkup(node.semanticKind)}" aria-label="${index + 1} of ${focusOrderedNodes.length}: ${escapeMarkup(node.label)} (${escapeMarkup(node.semanticKind)})"><circle cx="${node.position.x}" cy="${node.position.z}" r="1"/><title>${escapeMarkup(node.label)}</title></g>`
     ).join('');
-    const edges = scene.edges.map((edge) =>
+    const edges = orderedEdges.map((edge) =>
       `<path data-edge-id="${escapeMarkup(edge.id)}" data-semantic-kind="${escapeMarkup(edge.semanticKind)}" data-source="${escapeMarkup(edge.source)}" data-target="${escapeMarkup(edge.target)}"/>`
     ).join('');
     return { ...common, content: `<svg role="group" aria-label="Academic knowledge universe"><g role="list" aria-label="Knowledge nodes">${nodes}</g><g role="group" aria-label="Knowledge relations">${edges}</g></svg>` };
@@ -58,7 +59,7 @@ export function project(scene: SceneIR, projection: ProjectionKind): ProjectionM
   const details = focusOrderedNodes.map((node) =>
     `<article id="${escapeMarkup(node.id)}" tabindex="-1" data-node-id="${escapeMarkup(node.id)}" data-semantic-kind="${escapeMarkup(node.semanticKind)}"><h2>${escapeMarkup(node.label)}</h2><p>${escapeMarkup(node.semanticKind)}</p>${closingArticleTag}`
   ).join('');
-  const relations = scene.edges.map((edge) =>
+  const relations = orderedEdges.map((edge) =>
     `<li data-edge-id="${escapeMarkup(edge.id)}" data-semantic-kind="${escapeMarkup(edge.semanticKind)}"><a href="#${escapeMarkup(edge.source)}">${escapeMarkup(edge.source)}</a> → <a href="#${escapeMarkup(edge.target)}">${escapeMarkup(edge.target)}</a></li>`
   ).join('');
   return { ...common, content: `<nav aria-label="Academic knowledge universe"><ol>${navigation}</ol></nav><main aria-label="Knowledge node details">${details}</main><section aria-label="Relations"><ul>${relations}</ul></section>` };
