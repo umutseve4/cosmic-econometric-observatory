@@ -23,8 +23,23 @@ jobs:
         run: npm run typecheck
 
   test:
+    name: test (${{ matrix.name }})
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: curriculum-compiler
+            file: dist/tests/curriculum-compiler.test.js
+          - name: buu-snapshot
+            file: dist/tests/buu-snapshot.test.js
+          - name: world
+            file: dist/tests/world.test.js
+          - name: m1-integrity
+            file: tests/m1-integrity.test.mjs
+          - name: materializer
+            file: tests/materializer.test.mjs
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -32,5 +47,6 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --ignore-scripts
-      - name: Build and test
-        run: npm test
+      - run: npm run build
+      - name: Run ${{ matrix.name }} tests
+        run: node --test "${{ matrix.file }}"
