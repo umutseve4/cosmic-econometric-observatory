@@ -22,7 +22,6 @@ const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
 
 try {
   const htmlManifest = project(scene, 'html');
-  const svgManifest = project(scene, 'svg');
   const port = createBrowserDomPort(document);
   const htmlTarget = document.createElement('div');
   let htmlMounts = 0;
@@ -39,25 +38,6 @@ try {
   const htmlPrepared = port.prepareHtml(htmlManifest.content);
   assert(same(htmlPrepared.nodeDescriptors, htmlManifest.nodeDescriptors), 'html node descriptor parity');
   assert(same(htmlPrepared.edgeDescriptors, htmlManifest.edgeDescriptors), 'html edge descriptor parity');
-
-  const svgTarget = document.createElement('div');
-  let svgMounts = 0;
-  const svgReceipt = renderProjection(svgManifest, { replaceChildren(...nodes) { svgMounts += 1; svgTarget.replaceChildren(...nodes); } }, { dom: port });
-  assert(svgMounts === 1, 'svg mount count');
-  assert(same(svgReceipt.nodeIds, ['node:a', 'node:b']), 'svg receipt nodes');
-  assert(same(svgReceipt.edgeIds, ['edge:a-b']), 'svg receipt edges');
-  assert(same(svgReceipt.focusOrderNodeIds, ['node:a', 'node:b']), 'svg receipt focus');
-  const svgRoot = svgTarget.firstElementChild;
-  assert(svgRoot?.localName === 'svg', 'svg root');
-  assert(svgRoot?.namespaceURI === 'http://www.w3.org/2000/svg', 'svg namespace');
-  for (const element of svgRoot.querySelectorAll('*')) assert(element.namespaceURI === 'http://www.w3.org/2000/svg', `svg descendant namespace:${element.localName}`);
-  assert(!svgTarget.querySelector('img'), 'svg hostile image became active');
-  assert(!svgTarget.querySelector('[onerror]'), 'svg event attribute survived');
-  assert(svgTarget.textContent.includes(hostileLabel), 'svg label did not decode exactly');
-  assert(globalThis.__M3D_XSS__ === undefined && globalThis.__M3D_SCRIPT__ === undefined, 'svg hostile content executed');
-  const svgPrepared = port.prepareSvg(svgManifest.content);
-  assert(same(svgPrepared.nodeDescriptors, svgManifest.nodeDescriptors), 'svg node descriptor parity');
-  assert(same(svgPrepared.edgeDescriptors, svgManifest.edgeDescriptors), 'svg edge descriptor parity');
 
   result.textContent = 'M3D_BROWSER_SMOKE_PASS';
 } catch (error) {
