@@ -12,5 +12,6 @@
     "test:browser-smoke": "node scripts/run-real-browser-smoke.mjs",
     "verify": "npm run typecheck && npm test"
   },
+  "dependencies": { "three": "0.185.1" },
   "devDependencies": { "typescript": "5.9.2", "@types/node": "22.17.2" }
 }

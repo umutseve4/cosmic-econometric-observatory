@@ -4,18 +4,20 @@ import { createServer } from 'node:http';
 import { extname, normalize, resolve, sep } from 'node:path';
 
 const root = resolve(process.cwd());
-const passMarker = 'M3D_BROWSER_SMOKE_PASS';
-const failMarker = 'M3D_BROWSER_SMOKE_FAIL';
 const chrome = process.env.CHROME_BIN || 'google-chrome';
 const contentTypes = new Map([
   ['.html', 'text/html; charset=utf-8'],
   ['.js', 'text/javascript; charset=utf-8'],
   ['.map', 'application/json; charset=utf-8']
 ]);
+const cases = [
+  { page: 'tests/real-browser-dom-smoke.html', pass: 'M3D_BROWSER_SMOKE_PASS', fail: 'M3D_BROWSER_SMOKE_FAIL', flags: ['--disable-gpu'] },
+  { page: 'tests/real-browser-three-smoke.html', pass: 'M3F_BROWSER_SMOKE_PASS', fail: 'M3F_BROWSER_SMOKE_FAIL', flags: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] }
+];
 
 const server = createServer((request, response) => {
   const pathname = new URL(request.url ?? '/', 'http://127.0.0.1').pathname;
-  const relative = pathname === '/' ? 'tests/real-browser-dom-smoke.html' : decodeURIComponent(pathname.slice(1));
+  const relative = pathname === '/' ? cases[0].page : decodeURIComponent(pathname.slice(1));
   const file = resolve(root, normalize(relative));
   if (file !== root && !file.startsWith(`${root}${sep}`)) {
     response.writeHead(403).end('forbidden');
@@ -33,7 +35,7 @@ const server = createServer((request, response) => {
   }
 });
 
-const timeoutMs = 30_000;
+const timeoutMs = 60_000;
 let browser;
 const timeout = setTimeout(() => {
   browser?.kill('SIGKILL');
@@ -42,15 +44,9 @@ const timeout = setTimeout(() => {
   process.exitCode = 1;
 }, timeoutMs);
 
-try {
-  await new Promise((resolveListen, rejectListen) => {
-    server.once('error', rejectListen);
-    server.listen(0, '127.0.0.1', resolveListen);
-  });
-  const address = server.address();
-  if (address === null || typeof address === 'string') throw new Error('ephemeral port unavailable');
-  const url = `http://127.0.0.1:${address.port}/tests/real-browser-dom-smoke.html`;
-  browser = spawn(chrome, ['--headless=new', '--no-sandbox', '--disable-gpu', '--dump-dom', url], {
+async function runCase(testCase, port) {
+  const url = `http://127.0.0.1:${port}/${testCase.page}`;
+  browser = spawn(chrome, ['--headless=new', '--no-sandbox', ...testCase.flags, '--dump-dom', url], {
     stdio: ['ignore', 'pipe', 'pipe']
   });
   let stdout = '';
@@ -59,19 +55,27 @@ try {
   browser.stderr.setEncoding('utf8');
   browser.stdout.on('data', (chunk) => { stdout += chunk; });
   browser.stderr.on('data', (chunk) => { stderr += chunk; });
-  const result = await new Promise((resolveExit, rejectExit) => {
+  const exit = await new Promise((resolveExit, rejectExit) => {
     browser.once('error', rejectExit);
     browser.once('close', (code, signal) => resolveExit({ code, signal }));
   });
-  if (result.code !== 0 || result.signal !== null) {
-    throw new Error(`Chrome failed: code=${String(result.code)} signal=${String(result.signal)}\n${stderr}`);
-  }
+  if (exit.code !== 0 || exit.signal !== null) throw new Error(`Chrome failed for ${testCase.page}: code=${String(exit.code)} signal=${String(exit.signal)}\n${stderr}`);
   const resultMatch = stdout.match(/<pre id="result">([\s\S]*?)<\/pre>/u);
-  if (resultMatch === null) throw new Error(`browser page did not serialize #result\n${stdout}\n${stderr}`);
+  if (resultMatch === null) throw new Error(`browser page did not serialize #result for ${testCase.page}\n${stdout}\n${stderr}`);
   const resultText = resultMatch[1]?.trim() ?? '';
-  if (resultText.startsWith(failMarker)) throw new Error(`browser page reported failure\n${resultText}`);
-  if (resultText !== passMarker) throw new Error(`browser page reported unexpected result: ${resultText}`);
-  console.log(passMarker);
+  if (resultText.startsWith(testCase.fail)) throw new Error(`browser page reported failure for ${testCase.page}\n${resultText}`);
+  if (resultText !== testCase.pass) throw new Error(`browser page reported unexpected result for ${testCase.page}: ${resultText}`);
+  console.log(testCase.pass);
+}
+
+try {
+  await new Promise((resolveListen, rejectListen) => {
+    server.once('error', rejectListen);
+    server.listen(0, '127.0.0.1', resolveListen);
+  });
+  const address = server.address();
+  if (address === null || typeof address === 'string') throw new Error('ephemeral port unavailable');
+  for (const testCase of cases) await runCase(testCase, address.port);
 } finally {
   clearTimeout(timeout);
   await new Promise((resolveClose) => server.close(resolveClose));
