@@ -46,10 +46,11 @@ See [`docs/adr/0002-m2a-curriculum-graph-core.md`](docs/adr/0002-m2a-curriculum-
 
 M3a establishes a renderer-neutral parity gate before browser rendering begins.
 
+- `project()` returns the versioned `ProjectionManifestV2`; the legacy `ProjectionManifest` construction shape remains source-compatible.
 - Three.js payload, SVG projection and HTML fallback expose identical sorted semantic node/edge identifiers.
 - A separate `focusOrderNodeIds` contract makes keyboard and screen-reader traversal deterministic even if Scene IR arrays arrive in a different order.
-- HTML navigation links resolve to node detail targets and relation endpoints remain traversable.
-- SVG nodes expose ordered list semantics, position-aware accessible labels and keyboard focus.
+- HTML navigation links resolve to balanced node detail targets and relation endpoints remain traversable.
+- SVG nodes expose ordered list semantics, position-aware accessible labels and keyboard focus without an ancestor `img` role hiding descendants from the accessibility tree.
 - Duplicate node identifiers and invalid or duplicate focus orders fail closed before any projection is emitted.
 
 Browser renderer integration, visual interaction and deployment remain later M3 slices.

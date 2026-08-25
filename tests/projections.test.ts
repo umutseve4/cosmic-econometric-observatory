@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { SceneIR } from '../src/scene.js';
+import type { ProjectionManifest, SceneIR } from '../src/index.js';
 import { project } from '../src/projections.js';
 
 const scene: SceneIR = {
@@ -20,10 +20,16 @@ const scene: SceneIR = {
 test('all projections expose identical semantic node, edge and focus-order contracts', () => {
   const outputs = (['three', 'svg', 'html'] as const).map((kind) => project(scene, kind));
   for (const output of outputs) {
+    assert.equal(output.schemaVersion, '2.0.0');
     assert.deepEqual(output.nodeIds, ['node:a', 'node:b']);
     assert.deepEqual(output.edgeIds, ['edge:b-a']);
     assert.deepEqual(output.focusOrderNodeIds, ['node:a', 'node:b']);
   }
+});
+
+test('legacy ProjectionManifest construction remains source-compatible', () => {
+  const legacy: ProjectionManifest = { projection: 'html', nodeIds: [], edgeIds: [], content: '' };
+  assert.equal(legacy.projection, 'html');
 });
 
 test('focus order is deterministic rather than inherited from scene array order', () => {
@@ -34,22 +40,31 @@ test('focus order is deterministic rather than inherited from scene array order'
   assert.ok(baseline.content.indexOf('data-node-id="node:a"') < baseline.content.indexOf('data-node-id="node:b"'));
 });
 
-test('HTML fallback provides navigable node targets and linked relations', () => {
+test('HTML fallback provides balanced node targets and linked relations', () => {
   const html = project(scene, 'html').content;
   assert.match(html, /<a href="#node:a" data-node-id="node:a">A &lt;Program&gt;<\/a>/);
   assert.match(html, /<article id="node:a" tabindex="-1"/);
   assert.match(html, /data-edge-id="edge:b-a"/);
   assert.match(html, /<a href="#node:a">node:a<\/a> → <a href="#node:b">node:b<\/a>/);
   assert.doesNotMatch(html, /A <Program>/);
+  assert.equal((html.match(/<article\b/g) ?? []).length, scene.nodes.length);
+  assert.equal((html.match(/<\/article>/g) ?? []).length, scene.nodes.length);
 });
 
-test('SVG exposes deterministic keyboard and screen-reader traversal metadata', () => {
+test('SVG preserves descendant keyboard and screen-reader traversal semantics', () => {
   const svg = project(scene, 'svg').content;
+  assert.match(svg, /^<svg role="group" aria-label="Academic knowledge universe">/);
+  assert.doesNotMatch(svg, /role="img"/);
   assert.match(svg, /role="list" aria-label="Knowledge nodes"/);
   assert.match(svg, /aria-label="1 of 2: A &lt;Program&gt; \(program\)"/);
   assert.match(svg, /aria-label="2 of 2: B &amp; Beyond \(course\)"/);
   assert.equal((svg.match(/tabindex="0"/g) ?? []).length, 2);
   assert.ok(svg.indexOf('data-node-id="node:a"') < svg.indexOf('data-node-id="node:b"'));
+});
+
+test('projection fails closed on duplicate node identifiers', () => {
+  const duplicate = { ...scene, nodes: [scene.nodes[0]!, { ...scene.nodes[1]!, id: scene.nodes[0]!.id }] };
+  assert.throws(() => project(duplicate, 'three'), /DUPLICATE_PROJECTION_NODE_ID:node:b/);
 });
 
 test('projection fails closed on duplicate or invalid focus order', () => {
