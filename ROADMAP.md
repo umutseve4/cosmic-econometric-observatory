@@ -22,11 +22,20 @@
 
 ### Deferred M2 slices
 - Topic and laboratory nodes require pinned source evidence before compilation.
-- Renderer and deployment remain M3 work.
 
-## M3 — Observatory projections
+## M3 — Observatory projections (in progress)
+### M3a — Semantic projection contract
+- Three.js payload, SVG projection and HTML fallback expose identical sorted semantic node/edge sets.
+- Focus order is explicit, deterministic and independent of input array order.
+- HTML provides keyboard-navigable node targets and linked relations; SVG exposes ordered keyboard and screen-reader traversal metadata.
+- Invalid or duplicate focus order fails closed before projection.
+
+### Deferred M3 slices
+- Browser renderer integration, visual interaction and deployment follow after semantic parity is verified.
+
+### M3 exit
 - WebGL/Three.js renderer, SVG/HTML parity and screen-reader traversal.
-- Exit: semantic node/edge sets match across projections; fallback is fully usable.
+- Semantic node/edge sets match across projections; fallback is fully usable.
 
 ## M4 — RASAT protocol
 - Allow-listed, schema-validated scene commands and evidence orchestration.

@@ -42,6 +42,19 @@ M2a compiles the source-backed institution, Econometrics program, 2025–2026 cu
 
 See [`docs/adr/0002-m2a-curriculum-graph-core.md`](docs/adr/0002-m2a-curriculum-graph-core.md) for the exact boundary.
 
+## M3a — Semantic projection contract
+
+M3a establishes a renderer-neutral parity gate before browser rendering begins.
+
+- `project()` returns the versioned `ProjectionManifestV2`; the legacy `ProjectionManifest` construction shape remains source-compatible.
+- Three.js payload, SVG projection and HTML fallback expose identical sorted semantic node/edge identifiers.
+- A separate `focusOrderNodeIds` contract makes keyboard and screen-reader traversal deterministic even if Scene IR arrays arrive in a different order.
+- HTML navigation links resolve to balanced node detail targets and relation endpoints remain traversable.
+- SVG nodes expose ordered list semantics, position-aware accessible labels and keyboard focus without an ancestor `img` role hiding descendants from the accessibility tree.
+- Duplicate node identifiers and invalid or duplicate focus orders fail closed before any projection is emitted.
+
+Browser renderer integration, visual interaction and deployment remain later M3 slices.
+
 ## Verify
 
 Requires Node.js 22 or newer. The dependency graph is locked.
