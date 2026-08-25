@@ -3,6 +3,10 @@ import type { BrowserDomPort, PreparedBrowserProjection } from './browser-render
 
 const HTML_NS = 'http://www.w3.org/1999/xhtml';
 const SVG_NS = 'http://www.w3.org/2000/svg';
+const HTML_ELEMENTS = new Set(['nav', 'ol', 'li', 'a', 'main', 'article', 'h2', 'p', 'section', 'ul']);
+const SVG_ELEMENTS = new Set(['svg', 'g', 'circle', 'title', 'path']);
+const HTML_ATTRIBUTES = new Set(['id', 'href', 'tabindex', 'role', 'aria-label', 'data-node-id', 'data-edge-id', 'data-semantic-kind']);
+const SVG_ATTRIBUTES = new Set(['id', 'tabindex', 'role', 'aria-label', 'data-node-id', 'data-edge-id', 'data-semantic-kind', 'data-source', 'data-target', 'cx', 'cy', 'r']);
 
 type DomKind = 'html' | 'svg';
 
@@ -18,6 +22,7 @@ function prepare(document: Document, content: string, kind: DomKind): PreparedBr
   const template = document.createElement('template');
   template.innerHTML = content;
   const roots = Array.from(template.content.childNodes);
+  validateTree(roots, kind);
   const metadata = kind === 'html' ? inspectHtml(roots) : inspectSvg(roots);
   return Object.freeze({
     roots: Object.freeze(roots),
@@ -31,6 +36,24 @@ interface Metadata {
   nodeIds: string[];
   edgeIds: string[];
   focusOrderNodeIds: string[];
+}
+
+function validateTree(nodes: ArrayLike<Node>, kind: DomKind): void {
+  const expectedNamespace = kind === 'html' ? HTML_NS : SVG_NS;
+  const allowedElements = kind === 'html' ? HTML_ELEMENTS : SVG_ELEMENTS;
+  const allowedAttributes = kind === 'html' ? HTML_ATTRIBUTES : SVG_ATTRIBUTES;
+  for (const node of Array.from(nodes)) {
+    if (node.nodeType === 3) continue;
+    if (node.nodeType !== 1) fail(kind, 'node-type');
+    const element = node as Element;
+    if (element.namespaceURI !== expectedNamespace) fail(kind, 'namespace');
+    if (!allowedElements.has(element.localName)) fail(kind, 'element');
+    for (const rawName of element.getAttributeNames()) {
+      const name = rawName.toLowerCase();
+      if (name.startsWith('on') || name === 'style' || !allowedAttributes.has(name)) fail(kind, 'attribute');
+    }
+    validateTree(element.childNodes, kind);
+  }
 }
 
 function inspectHtml(nodes: readonly Node[]): Metadata {
@@ -57,6 +80,7 @@ function inspectHtml(nodes: readonly Node[]): Metadata {
     if (links.length !== 1 || links[0]!.localName !== 'a') fail('html', 'navigation');
     const link = links[0]!;
     attrs(link, 'html', ['href', 'data-node-id']);
+    if (elements(link.childNodes, 'html', true).length !== 0) fail('html', 'navigation-text');
     const id = identifier(link.getAttribute('data-node-id'), 'html', 'node-id');
     if (link.getAttribute('href') !== `#${id}`) fail('html', 'href');
     focusOrderNodeIds.push(id);
@@ -72,6 +96,9 @@ function inspectHtml(nodes: readonly Node[]): Metadata {
     if (details.length !== 2 || names(details) !== 'h2,p') fail('html', 'article-structure');
     attrs(details[0]!, 'html', []);
     attrs(details[1]!, 'html', []);
+    if (elements(details[0]!.childNodes, 'html', true).length !== 0 || elements(details[1]!.childNodes, 'html', true).length !== 0) {
+      fail('html', 'article-text');
+    }
     nodeIdsUnsorted.push(id);
   }
   unique(nodeIdsUnsorted, 'html', 'node-id');
@@ -88,6 +115,7 @@ function inspectHtml(nodes: readonly Node[]): Metadata {
     if (links.length !== 2 || links.some((link) => link.localName !== 'a')) fail('html', 'relation-shape');
     for (const link of links) {
       attrs(link, 'html', ['href']);
+      if (elements(link.childNodes, 'html', true).length !== 0) fail('html', 'relation-text');
       const href = link.getAttribute('href');
       if (href === null || !href.startsWith('#') || !nodeIds.includes(href.slice(1))) fail('html', 'relation-target');
     }
@@ -119,6 +147,9 @@ function inspectSvg(nodes: readonly Node[]): Metadata {
     if (children.length !== 2 || names(children) !== 'circle,title') fail('svg', 'node-structure');
     attrs(children[0]!, 'svg', ['cx', 'cy', 'r']);
     attrs(children[1]!, 'svg', []);
+    if (elements(children[0]!.childNodes, 'svg', false).length !== 0 || elements(children[1]!.childNodes, 'svg', true).length !== 0) {
+      fail('svg', 'node-children');
+    }
     focusOrderNodeIds.push(id);
   }
   unique(focusOrderNodeIds, 'svg', 'node-id');
@@ -128,6 +159,7 @@ function inspectSvg(nodes: readonly Node[]): Metadata {
   for (const edge of elements(edgeGroup.childNodes, 'svg', false)) {
     if (edge.localName !== 'path') fail('svg', 'edges');
     attrs(edge, 'svg', ['data-edge-id', 'data-semantic-kind', 'data-source', 'data-target']);
+    if (elements(edge.childNodes, 'svg', false).length !== 0) fail('svg', 'edge-children');
     const edgeId = identifier(edge.getAttribute('data-edge-id'), 'svg', 'edge-id');
     const source = identifier(edge.getAttribute('data-source'), 'svg', 'edge-source');
     const target = identifier(edge.getAttribute('data-target'), 'svg', 'edge-target');
