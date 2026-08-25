@@ -10,5 +10,51 @@ for(const kind of ['html','svg','three'] as const)test(`${kind} validates truste
 
 test('rejects forged prepared node descriptor before target mutation',()=>{const manifest=project(scene,'html');const value={...prepared(manifest),nodeDescriptors:manifest.nodeDescriptors.map((v)=>({...v}))};value.nodeDescriptors[0]={...value.nodeDescriptors[0]!,label:'forged'};let calls=0;assert.throws(()=>renderProjection(manifest,{replaceChildren(){calls+=1;}},ports(manifest,value)),/BROWSER_RENDER_NODE_DESCRIPTORS_MISMATCH/);assert.equal(calls,0);});
 test('rejects forged prepared edge endpoint before target mutation',()=>{const manifest=project(scene,'svg');const value={...prepared(manifest),edgeDescriptors:manifest.edgeDescriptors.map((v)=>({...v}))};value.edgeDescriptors[0]={...value.edgeDescriptors[0]!,target:'node:a'};let calls=0;assert.throws(()=>renderProjection(manifest,{replaceChildren(){calls+=1;}},ports(manifest,value)),/BROWSER_RENDER_EDGE_DESCRIPTORS_MISMATCH/);assert.equal(calls,0);});
-test('rejects missing, duplicate, and reordered manifest descriptors before preparation',()=>{for(const mutate of [(m:ProjectionManifestV2)=>({...m,nodeDescriptors:undefined}),(m:ProjectionManifestV2)=>({...m,nodeDescriptors:[m.nodeDescriptors[0],m.nodeDescriptors[0]]}),(m:ProjectionManifestV2)=>({...m,nodeDescriptors:[...m.nodeDescriptors].reverse()})]){const base=project(scene,'html');const manifest=mutate(base) as ProjectionManifestV2;let preparedCalls=0,targetCalls=0;assert.throws(()=>renderProjection(manifest,{replaceChildren(){targetCalls+=1;}},{dom:{prepareHtml(){preparedCalls+=1;return prepared(base);},prepareSvg(){preparedCalls+=1;return prepared(base);}}}),/BROWSER_RENDER_INVALID_MANIFEST:nodeDescriptors:(type|duplicate|unsorted)/);assert.equal(preparedCalls,0);assert.equal(targetCalls,0);}});
-test('derives Three node and edge semantics before calling injected port',()=>{for(const mutate of [(payload:any)=>{payload.nodes[0].label='drift';},(payload:any)=>{payload.nodes[0].semanticKind='drift';},(payload:any)=>{payload.edges[0].target='node:a';}]){const base=project(scene,'three');const payload=JSON.parse(base.content);mutate(payload);const manifest={...base,content:JSON.stringify(payload)};let portCalls=0,targetCalls=0;assert.throws(()=>renderProjection(manifest,{replaceChildren(){targetCalls+=1;}},{dom:{prepareHtml(){throw new Error('unused');},prepareSvg(){throw new Error('unused');}},three:{prepareThree(){portCalls+=1;return prepared(base);}}}),/BROWSER_RENDER_(NODE|EDGE)_DESCRIPTORS_MISMATCH/);assert.equal(portCalls,0);assert.equal(targetCalls,0);}});
+test('rejects missing, duplicate, and reordered manifest descriptors before preparation',()=>{for(const mutate of [(m:ProjectionManifestV2)=>({...m,nodeDescriptors:undefined}),(m:ProjectionManifestV2)=>({...m,nodeDescriptors:[m.nodeDescriptors[0]!,m.nodeDescriptors[0]!]}),(m:ProjectionManifestV2)=>({...m,nodeDescriptors:[...m.nodeDescriptors].reverse()})]){const base=project(scene,'html');const manifest=mutate(base) as ProjectionManifestV2;let preparedCalls=0,targetCalls=0;assert.throws(()=>renderProjection(manifest,{replaceChildren(){targetCalls+=1;}},{dom:{prepareHtml(){preparedCalls+=1;return prepared(base);},prepareSvg(){preparedCalls+=1;return prepared(base);}}}),/BROWSER_RENDER_INVALID_MANIFEST:nodeDescriptors:(type|duplicate|unsorted)/);assert.equal(preparedCalls,0);assert.equal(targetCalls,0);}});
+
+type MutableThreePayload = {
+  scene: string;
+  nodes: Array<{ id:string; semanticKind:string; label:string; position:{x:number;y:number;z:number}; focusOrder:number; capabilities:string[]; [key:string]:unknown }>;
+  edges: Array<{ id:string; semanticKind:string; source:string; target:string; [key:string]:unknown }>;
+  [key:string]: unknown;
+};
+
+test('derives Three node and edge semantics before calling injected port',()=>{for(const mutate of [(payload:MutableThreePayload)=>{payload.nodes[0]!.label='drift';},(payload:MutableThreePayload)=>{payload.nodes[0]!.semanticKind='drift';},(payload:MutableThreePayload)=>{payload.edges[0]!.target='node:a';}]){const base=project(scene,'three');const payload=JSON.parse(base.content) as MutableThreePayload;mutate(payload);const manifest={...base,content:JSON.stringify(payload)};let portCalls=0,targetCalls=0;assert.throws(()=>renderProjection(manifest,{replaceChildren(){targetCalls+=1;}},{dom:{prepareHtml(){throw new Error('unused');},prepareSvg(){throw new Error('unused');}},three:{prepareThree(){portCalls+=1;return prepared(base);}}}),/BROWSER_RENDER_(NODE|EDGE)_DESCRIPTORS_MISMATCH/);assert.equal(portCalls,0);assert.equal(targetCalls,0);}});
+
+test('rejects unknown manifest descriptor keys before preparation',()=>{
+  const base=project(scene,'html');
+  const firstNode=base.nodeDescriptors[0]!;
+  const firstEdge=base.edgeDescriptors[0]!;
+  for(const manifest of [
+    {...base,nodeDescriptors:[{...firstNode,forged:true},...base.nodeDescriptors.slice(1)]} as unknown as ProjectionManifestV2,
+    {...base,edgeDescriptors:[{...firstEdge,forged:true},...base.edgeDescriptors.slice(1)]} as unknown as ProjectionManifestV2
+  ]){
+    let preparationCalls=0,targetCalls=0;
+    assert.throws(()=>renderProjection(manifest,{replaceChildren(){targetCalls+=1;}},{dom:{prepareHtml(){preparationCalls+=1;return prepared(base);},prepareSvg(){preparationCalls+=1;return prepared(base);}}}),/BROWSER_RENDER_INVALID_MANIFEST:(node|edge)Descriptors:unknown-key/);
+    assert.equal(preparationCalls,0);assert.equal(targetCalls,0);
+  }
+});
+
+test('rejects unknown prepared descriptor keys before target mutation',()=>{
+  const base=project(scene,'html');
+  const value=prepared(base);
+  const hostile={...value,nodeDescriptors:[{...value.nodeDescriptors[0]!,forged:true},...value.nodeDescriptors.slice(1)]} as unknown as PreparedBrowserProjection<string>;
+  let targetCalls=0;
+  assert.throws(()=>renderProjection(base,{replaceChildren(){targetCalls+=1;}},ports(base,hostile)),/BROWSER_RENDER_INVALID_CONTENT:html:nodeDescriptors:unknown-key/);
+  assert.equal(targetCalls,0);
+});
+
+test('passes only a rebuilt allow-listed canonical DTO to the Three port',()=>{
+  const base=project(scene,'three');
+  const payload=JSON.parse(base.content) as MutableThreePayload;
+  payload.forged='top';
+  payload.nodes[0]!.forged='node';
+  payload.nodes[0]!.position={...payload.nodes[0]!.position,forged:1} as unknown as {x:number;y:number;z:number};
+  payload.edges[0]!.forged='edge';
+  let captured:unknown;
+  let targetCalls=0;
+  renderProjection({...base,content:JSON.stringify(payload)},{replaceChildren(){targetCalls+=1;}},{dom:{prepareHtml(){throw new Error('unused');},prepareSvg(){throw new Error('unused');}},three:{prepareThree(value){captured=value;return prepared(base);}}});
+  const expected=JSON.parse(base.content) as unknown;
+  assert.deepEqual(captured,expected);
+  assert.equal(targetCalls,1);
+});
