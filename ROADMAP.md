@@ -24,11 +24,12 @@
 - Topic and laboratory nodes require pinned source evidence before compilation.
 
 ## M3 — Observatory projections (in progress)
-### M3a — Semantic projection contract
+### M3a — Semantic projection contract (Verified)
 - Three.js payload, SVG projection and HTML fallback expose identical sorted semantic node/edge sets.
 - Focus order is explicit, deterministic and independent of input array order.
 - HTML provides keyboard-navigable node targets and linked relations; SVG exposes ordered keyboard and screen-reader traversal metadata.
 - Invalid or duplicate focus order fails closed before projection.
+- Verified at squash merge `9b5be56dbb30492b7e0fe020e7df02af9981bb9a` with post-merge CI run `32837850801`, job `97770623464`, `0` annotations, and independent QA PASS with CRITICAL/HIGH/MEDIUM findings `0/0/0`.
 
 ### Deferred M3 slices
 - Browser renderer integration, visual interaction and deployment follow after semantic parity is verified.
