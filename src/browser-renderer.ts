@@ -19,6 +19,8 @@ export interface BrowserDomPreparationPort<NodeLike = unknown> {
   prepareSvg(content: string): PreparedBrowserProjection<NodeLike>;
 }
 
+export type BrowserDomPort<NodeLike = unknown> = BrowserDomPreparationPort<NodeLike>;
+
 export interface BrowserThreePreparationPort<NodeLike = unknown> {
   prepareThree(payload: unknown): PreparedBrowserProjection<NodeLike>;
 }
@@ -126,9 +128,7 @@ function validateNodeDescriptors(input: unknown, expectedNodeIds: readonly strin
     if (typeof record.id !== 'string' || typeof record.label !== 'string' || typeof record.kind !== 'string') {
       throw new Error('BROWSER_RENDER_INVALID_MANIFEST:nodeDescriptors:shape');
     }
-    if (!hasOnlyKeys(record, ['id', 'label', 'kind'])) {
-      throw new Error('BROWSER_RENDER_INVALID_MANIFEST:nodeDescriptors:unknown-key');
-    }
+    if (!hasOnlyKeys(record, ['id', 'label', 'kind'])) throw new Error('BROWSER_RENDER_INVALID_MANIFEST:nodeDescriptors:unknown-key');
     return { id: record.id, label: record.label, kind: record.kind };
   });
   const ids = validateIds(descriptors.map(({ id }) => id), 'nodeDescriptors', true);
@@ -144,9 +144,7 @@ function validateEdgeDescriptors(input: unknown, expectedEdgeIds: readonly strin
     if (typeof record.id !== 'string' || typeof record.source !== 'string' || typeof record.target !== 'string') {
       throw new Error('BROWSER_RENDER_INVALID_MANIFEST:edgeDescriptors:shape');
     }
-    if (!hasOnlyKeys(record, ['id', 'source', 'target'])) {
-      throw new Error('BROWSER_RENDER_INVALID_MANIFEST:edgeDescriptors:unknown-key');
-    }
+    if (!hasOnlyKeys(record, ['id', 'source', 'target'])) throw new Error('BROWSER_RENDER_INVALID_MANIFEST:edgeDescriptors:unknown-key');
     return { id: record.id, source: record.source, target: record.target };
   });
   const ids = validateIds(descriptors.map(({ id }) => id), 'edgeDescriptors', true);
@@ -187,7 +185,6 @@ function parseAndValidateThreePayload(manifest: ProjectionManifestV2): Canonical
   if (typeof payload.scene !== 'string' || !Array.isArray(payload.nodes) || !Array.isArray(payload.edges)) {
     throw new Error('BROWSER_RENDER_INVALID_CONTENT:three:shape');
   }
-
   const nodeIds = new Set<string>();
   const focusOrders = new Set<number>();
   const derivedNodes: ProjectionNodeDescriptor[] = [];
@@ -209,16 +206,10 @@ function parseAndValidateThreePayload(manifest: ProjectionManifestV2): Canonical
     nodeIds.add(node.id);
     focusOrders.add(node.focusOrder as number);
     derivedNodes.push({ id: node.id, label: node.label, kind: node.semanticKind });
-    canonicalNodes.push({
-      id: node.id,
-      semanticKind: node.semanticKind,
-      label: node.label,
-      position: { x: coordinates.x, y: coordinates.y, z: coordinates.z },
-      focusOrder: node.focusOrder as number,
-      capabilities: [...node.capabilities] as string[]
-    });
+    canonicalNodes.push({ id: node.id, semanticKind: node.semanticKind, label: node.label,
+      position: { x: coordinates.x, y: coordinates.y, z: coordinates.z }, focusOrder: node.focusOrder as number,
+      capabilities: [...node.capabilities] as string[] });
   }
-
   const edgeIds = new Set<string>();
   const derivedEdges: ProjectionEdgeDescriptor[] = [];
   const canonicalEdges: ThreeEdgePayload[] = [];
@@ -226,14 +217,11 @@ function parseAndValidateThreePayload(manifest: ProjectionManifestV2): Canonical
     if (!item || typeof item !== 'object') throw new Error('BROWSER_RENDER_INVALID_CONTENT:three:edges');
     const edge = item as Record<string, unknown>;
     if (typeof edge.id !== 'string' || typeof edge.semanticKind !== 'string' || typeof edge.source !== 'string' || typeof edge.target !== 'string' ||
-        edgeIds.has(edge.id) || !nodeIds.has(edge.source) || !nodeIds.has(edge.target)) {
-      throw new Error('BROWSER_RENDER_INVALID_CONTENT:three:edges');
-    }
+        edgeIds.has(edge.id) || !nodeIds.has(edge.source) || !nodeIds.has(edge.target)) throw new Error('BROWSER_RENDER_INVALID_CONTENT:three:edges');
     edgeIds.add(edge.id);
     derivedEdges.push({ id: edge.id, source: edge.source, target: edge.target });
     canonicalEdges.push({ id: edge.id, semanticKind: edge.semanticKind, source: edge.source, target: edge.target });
   }
-
   const orderedNodeIds = [...nodeIds].sort(compareCodePoints);
   const orderedEdgeIds = [...edgeIds].sort(compareCodePoints);
   const focusOrderNodeIds = [...canonicalNodes].sort((a, b) => a.focusOrder - b.focusOrder).map(({ id }) => id);
@@ -247,24 +235,17 @@ function parseAndValidateThreePayload(manifest: ProjectionManifestV2): Canonical
   return { scene: payload.scene, nodes: canonicalNodes, edges: canonicalEdges };
 }
 
-function rejectUnknownPreparedDescriptorKeys(
-  input: readonly unknown[],
-  allowed: readonly string[],
-  projection: ProjectionManifestV2['projection'],
-  name: string
-): void {
+function rejectUnknownPreparedDescriptorKeys(input: readonly unknown[], allowed: readonly string[], projection: ProjectionManifestV2['projection'], name: string): void {
   for (const value of input) {
     if (value && typeof value === 'object' && !hasOnlyKeys(value as Record<string, unknown>, allowed)) {
       throw new Error(`BROWSER_RENDER_INVALID_CONTENT:${projection}:${name}:unknown-key`);
     }
   }
 }
-
 function hasOnlyKeys(record: Record<string, unknown>, allowed: readonly string[]): boolean {
   const allowedKeys = new Set(allowed);
   return Object.keys(record).every((key) => allowedKeys.has(key));
 }
-
 function byDescriptorId(a: { id: string }, b: { id: string }): number { return compareCodePoints(a.id, b.id); }
 function sameArray(left: readonly string[], right: readonly string[]): boolean { return left.length === right.length && left.every((value, index) => value === right[index]); }
 function sameSet(left: readonly string[], right: readonly string[]): boolean { return left.length === right.length && new Set(left).size === new Set([...left, ...right]).size; }
