@@ -52,6 +52,12 @@
 - This slice is a Chromium smoke test, not cross-browser or assistive-technology conformance.
 - Verified at squash merge `5234ba23432b169706875b8bcbca4347e6ee5f17` with post-merge CI run `32847376714`, job `97800124908`, suite `88977916587`, `0` annotations, and fresh independent QA PASS with CRITICAL/HIGH/MEDIUM/LOW findings `0/0/0/0`.
 
+### M3e — Trusted semantic descriptor parity (Verified)
+- Treat manifest and prepared semantic descriptors as untrusted claims and independently reconstruct canonical node `{id,label,kind}` and edge `{id,source,target}` descriptors from validated Three JSON or detached allow-listed DOM.
+- Reject forged, missing, reordered, duplicate or drifting descriptors before target mutation while preserving exact edge shape and canonical Three DTO allow-listing.
+- Preserve bounded M3b renderer regressions and full existing M3d real-Chromium smoke security and SVG namespace coverage through browser-safe direct module imports.
+- Verified at squash merge `168a44922b204c9afe4c5f3d8305d877f912ac7b` with exact-main push CI [run `32868471602`](https://api.github.com/repos/umutseve4/cosmic-econometric-observatory/actions/runs/32868471602) and [job `97869472712`](https://api.github.com/repos/umutseve4/cosmic-econometric-observatory/actions/jobs/97869472712), completed successfully.
+
 ### Deferred M3 slices
 - Concrete Three.js/WebGL implementation, visual interaction, cross-browser and assistive-technology validation, and deployment remain deferred.
 
