@@ -1,5 +1,6 @@
 import { compareCodePoints } from './canonical.js';
 import type { BrowserDomPort, PreparedBrowserProjection } from './browser-renderer.js';
+import type { ProjectionEdgeDescriptor, ProjectionNodeDescriptor } from './projections.js';
 
 const HTML_NS = 'http://www.w3.org/1999/xhtml';
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -9,6 +10,14 @@ const HTML_ATTRIBUTES = new Set(['id', 'href', 'tabindex', 'role', 'aria-label',
 const SVG_ATTRIBUTES = new Set(['id', 'tabindex', 'role', 'aria-label', 'data-node-id', 'data-edge-id', 'data-semantic-kind', 'data-source', 'data-target', 'cx', 'cy', 'r']);
 
 type DomKind = 'html' | 'svg';
+
+interface Metadata {
+  nodeIds: string[];
+  edgeIds: string[];
+  focusOrderNodeIds: string[];
+  nodeDescriptors: ProjectionNodeDescriptor[];
+  edgeDescriptors: ProjectionEdgeDescriptor[];
+}
 
 export function createBrowserDomPort(document: Document): BrowserDomPort<Node> {
   return {
@@ -28,14 +37,10 @@ function prepare(document: Document, content: string, kind: DomKind): PreparedBr
     roots: Object.freeze(roots),
     nodeIds: Object.freeze(metadata.nodeIds),
     edgeIds: Object.freeze(metadata.edgeIds),
-    focusOrderNodeIds: Object.freeze(metadata.focusOrderNodeIds)
+    focusOrderNodeIds: Object.freeze(metadata.focusOrderNodeIds),
+    nodeDescriptors: Object.freeze(metadata.nodeDescriptors),
+    edgeDescriptors: Object.freeze(metadata.edgeDescriptors)
   });
-}
-
-interface Metadata {
-  nodeIds: string[];
-  edgeIds: string[];
-  focusOrderNodeIds: string[];
 }
 
 function validateTree(nodes: ArrayLike<Node>, kind: DomKind): void {
@@ -80,49 +85,54 @@ function inspectHtml(nodes: readonly Node[]): Metadata {
     if (links.length !== 1 || links[0]!.localName !== 'a') fail('html', 'navigation');
     const link = links[0]!;
     attrs(link, 'html', ['href', 'data-node-id']);
-    if (elements(link.childNodes, 'html', true).length !== 0) fail('html', 'navigation-text');
+    requireTextOnly(link, 'html', 'navigation-text');
     const id = identifier(link.getAttribute('data-node-id'), 'html', 'node-id');
     if (link.getAttribute('href') !== `#${id}`) fail('html', 'href');
     focusOrderNodeIds.push(id);
   }
 
-  const nodeIdsUnsorted: string[] = [];
+  const nodeDescriptors: ProjectionNodeDescriptor[] = [];
   for (const article of mainChildren) {
     if (article.localName !== 'article') fail('html', 'articles');
     attrs(article, 'html', ['id', 'tabindex', 'data-node-id', 'data-semantic-kind']);
     const id = identifier(article.getAttribute('data-node-id'), 'html', 'node-id');
+    const kind = identifier(article.getAttribute('data-semantic-kind'), 'html', 'semantic-kind');
     if (article.getAttribute('id') !== id || article.getAttribute('tabindex') !== '-1') fail('html', 'article-metadata');
     const details = elements(article.childNodes, 'html', false);
     if (details.length !== 2 || names(details) !== 'h2,p') fail('html', 'article-structure');
     attrs(details[0]!, 'html', []);
     attrs(details[1]!, 'html', []);
-    if (elements(details[0]!.childNodes, 'html', true).length !== 0 || elements(details[1]!.childNodes, 'html', true).length !== 0) {
-      fail('html', 'article-text');
-    }
-    nodeIdsUnsorted.push(id);
+    requireTextOnly(details[0]!, 'html', 'article-text');
+    requireTextOnly(details[1]!, 'html', 'article-text');
+    nodeDescriptors.push({ id, label: text(details[0]!), kind });
   }
+  const nodeIdsUnsorted = nodeDescriptors.map(({ id }) => id);
   unique(nodeIdsUnsorted, 'html', 'node-id');
   unique(focusOrderNodeIds, 'html', 'focus-order');
   const nodeIds = [...nodeIdsUnsorted].sort(compareCodePoints);
   if (!sameSet(nodeIds, focusOrderNodeIds)) fail('html', 'node-set');
+  nodeDescriptors.sort((left, right) => compareCodePoints(left.id, right.id));
 
-  const edgeIdsUnsorted: string[] = [];
+  const edgeDescriptors: ProjectionEdgeDescriptor[] = [];
   for (const item of elements(sectionChildren[0]!.childNodes, 'html', true)) {
     if (item.localName !== 'li') fail('html', 'relations');
     attrs(item, 'html', ['data-edge-id', 'data-semantic-kind']);
-    const edgeId = identifier(item.getAttribute('data-edge-id'), 'html', 'edge-id');
+    const id = identifier(item.getAttribute('data-edge-id'), 'html', 'edge-id');
     const links = elements(item.childNodes, 'html', true);
     if (links.length !== 2 || links.some((link) => link.localName !== 'a')) fail('html', 'relation-shape');
+    const endpoints: string[] = [];
     for (const link of links) {
       attrs(link, 'html', ['href']);
-      if (elements(link.childNodes, 'html', true).length !== 0) fail('html', 'relation-text');
+      requireTextOnly(link, 'html', 'relation-text');
       const href = link.getAttribute('href');
       if (href === null || !href.startsWith('#') || !nodeIds.includes(href.slice(1))) fail('html', 'relation-target');
+      endpoints.push(href.slice(1));
     }
-    edgeIdsUnsorted.push(edgeId);
+    edgeDescriptors.push({ id, source: endpoints[0]!, target: endpoints[1]! });
   }
-  unique(edgeIdsUnsorted, 'html', 'edge-id');
-  return { nodeIds, edgeIds: edgeIdsUnsorted.sort(compareCodePoints), focusOrderNodeIds };
+  unique(edgeDescriptors.map(({ id }) => id), 'html', 'edge-id');
+  edgeDescriptors.sort((left, right) => compareCodePoints(left.id, right.id));
+  return { nodeIds, edgeIds: edgeDescriptors.map(({ id }) => id), focusOrderNodeIds, nodeDescriptors, edgeDescriptors };
 }
 
 function inspectSvg(nodes: readonly Node[]): Metadata {
@@ -138,36 +148,40 @@ function inspectSvg(nodes: readonly Node[]): Metadata {
   if (nodeGroup.getAttribute('role') !== 'list' || edgeGroup.getAttribute('role') !== 'group') fail('svg', 'groups');
 
   const focusOrderNodeIds: string[] = [];
+  const nodeDescriptors: ProjectionNodeDescriptor[] = [];
   for (const node of elements(nodeGroup.childNodes, 'svg', false)) {
     if (node.localName !== 'g') fail('svg', 'nodes');
     attrs(node, 'svg', ['id', 'role', 'tabindex', 'data-node-id', 'data-semantic-kind', 'aria-label']);
     const id = identifier(node.getAttribute('data-node-id'), 'svg', 'node-id');
+    const kind = identifier(node.getAttribute('data-semantic-kind'), 'svg', 'semantic-kind');
     if (node.getAttribute('id') !== id || node.getAttribute('role') !== 'listitem' || node.getAttribute('tabindex') !== '0') fail('svg', 'node-metadata');
     const children = elements(node.childNodes, 'svg', false);
     if (children.length !== 2 || names(children) !== 'circle,title') fail('svg', 'node-structure');
     attrs(children[0]!, 'svg', ['cx', 'cy', 'r']);
     attrs(children[1]!, 'svg', []);
-    if (elements(children[0]!.childNodes, 'svg', false).length !== 0 || elements(children[1]!.childNodes, 'svg', true).length !== 0) {
-      fail('svg', 'node-children');
-    }
+    if (elements(children[0]!.childNodes, 'svg', false).length !== 0) fail('svg', 'node-children');
+    requireTextOnly(children[1]!, 'svg', 'node-children');
     focusOrderNodeIds.push(id);
+    nodeDescriptors.push({ id, label: text(children[1]!), kind });
   }
   unique(focusOrderNodeIds, 'svg', 'node-id');
   const nodeIds = [...focusOrderNodeIds].sort(compareCodePoints);
+  nodeDescriptors.sort((left, right) => compareCodePoints(left.id, right.id));
 
-  const edgeIdsUnsorted: string[] = [];
+  const edgeDescriptors: ProjectionEdgeDescriptor[] = [];
   for (const edge of elements(edgeGroup.childNodes, 'svg', false)) {
     if (edge.localName !== 'path') fail('svg', 'edges');
     attrs(edge, 'svg', ['data-edge-id', 'data-semantic-kind', 'data-source', 'data-target']);
     if (elements(edge.childNodes, 'svg', false).length !== 0) fail('svg', 'edge-children');
-    const edgeId = identifier(edge.getAttribute('data-edge-id'), 'svg', 'edge-id');
+    const id = identifier(edge.getAttribute('data-edge-id'), 'svg', 'edge-id');
     const source = identifier(edge.getAttribute('data-source'), 'svg', 'edge-source');
     const target = identifier(edge.getAttribute('data-target'), 'svg', 'edge-target');
     if (!nodeIds.includes(source) || !nodeIds.includes(target)) fail('svg', 'edge-endpoint');
-    edgeIdsUnsorted.push(edgeId);
+    edgeDescriptors.push({ id, source, target });
   }
-  unique(edgeIdsUnsorted, 'svg', 'edge-id');
-  return { nodeIds, edgeIds: edgeIdsUnsorted.sort(compareCodePoints), focusOrderNodeIds };
+  unique(edgeDescriptors.map(({ id }) => id), 'svg', 'edge-id');
+  edgeDescriptors.sort((left, right) => compareCodePoints(left.id, right.id));
+  return { nodeIds, edgeIds: edgeDescriptors.map(({ id }) => id), focusOrderNodeIds, nodeDescriptors, edgeDescriptors };
 }
 
 function elements(nodes: ArrayLike<Node>, kind: DomKind, allowText: boolean): Element[] {
@@ -185,6 +199,15 @@ function elements(nodes: ArrayLike<Node>, kind: DomKind, allowText: boolean): El
     }
   }
   return result;
+}
+
+function requireTextOnly(element: Element, kind: DomKind, reason: string): void {
+  if (elements(element.childNodes, kind, true).length !== 0) fail(kind, reason);
+}
+
+function text(node: Node): string {
+  if (node.nodeType === 3) return node.textContent ?? '';
+  return Array.from(node.childNodes).map(text).join('');
 }
 
 function attrs(element: Element, kind: DomKind, allowed: readonly string[]): void {

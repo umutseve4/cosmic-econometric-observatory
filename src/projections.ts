@@ -3,6 +3,18 @@ import type { SceneIR, SceneNode } from './scene.js';
 
 export type ProjectionKind = 'three' | 'svg' | 'html';
 
+export interface ProjectionNodeDescriptor {
+  readonly id: string;
+  readonly label: string;
+  readonly kind: string;
+}
+
+export interface ProjectionEdgeDescriptor {
+  readonly id: string;
+  readonly source: string;
+  readonly target: string;
+}
+
 /** Legacy construction shape retained for source compatibility. */
 export interface ProjectionManifest {
   projection: ProjectionKind;
@@ -11,18 +23,32 @@ export interface ProjectionManifest {
   content: string;
 }
 
-/** Versioned M3a output contract returned by project(). */
+/** Versioned M3 output contract returned by project(). */
 export interface ProjectionManifestV2 extends ProjectionManifest {
   schemaVersion: '2.0.0';
   focusOrderNodeIds: readonly string[];
+  nodeDescriptors: readonly ProjectionNodeDescriptor[];
+  edgeDescriptors: readonly ProjectionEdgeDescriptor[];
 }
 
 export function project(scene: SceneIR, projection: ProjectionKind): ProjectionManifestV2 {
   const focusOrderedNodes = validateAndOrderNodes(scene.nodes);
-  const nodeIds = scene.nodes.map((node) => node.id).sort(compareCodePoints);
-  const edgeIds = scene.edges.map((edge) => edge.id).sort(compareCodePoints);
+  const canonicalNodes = [...scene.nodes].sort((left, right) => compareCodePoints(left.id, right.id));
+  const canonicalEdges = [...scene.edges].sort((left, right) => compareCodePoints(left.id, right.id));
+  const nodeIds = canonicalNodes.map((node) => node.id);
+  const edgeIds = canonicalEdges.map((edge) => edge.id);
   const focusOrderNodeIds = focusOrderedNodes.map((node) => node.id);
-  const common = { schemaVersion: '2.0.0' as const, projection, nodeIds, edgeIds, focusOrderNodeIds };
+  const nodeDescriptors = canonicalNodes.map(({ id, label, semanticKind }) => ({ id, label, kind: semanticKind }));
+  const edgeDescriptors = canonicalEdges.map(({ id, source, target }) => ({ id, source, target }));
+  const common = {
+    schemaVersion: '2.0.0' as const,
+    projection,
+    nodeIds,
+    edgeIds,
+    focusOrderNodeIds,
+    nodeDescriptors,
+    edgeDescriptors
+  };
 
   if (projection === 'three') {
     return {
@@ -32,7 +58,7 @@ export function project(scene: SceneIR, projection: ProjectionKind): ProjectionM
         nodes: focusOrderedNodes.map(({ id, semanticKind, label, position, focusOrder, capabilities }) => ({
           id, semanticKind, label, position, focusOrder, capabilities
         })),
-        edges: scene.edges
+        edges: canonicalEdges
       })
     };
   }
@@ -41,7 +67,7 @@ export function project(scene: SceneIR, projection: ProjectionKind): ProjectionM
     const nodes = focusOrderedNodes.map((node, index) =>
       `<g id="${escapeMarkup(node.id)}" role="listitem" tabindex="0" data-node-id="${escapeMarkup(node.id)}" data-semantic-kind="${escapeMarkup(node.semanticKind)}" aria-label="${index + 1} of ${focusOrderedNodes.length}: ${escapeMarkup(node.label)} (${escapeMarkup(node.semanticKind)})"><circle cx="${node.position.x}" cy="${node.position.z}" r="1"/><title>${escapeMarkup(node.label)}</title></g>`
     ).join('');
-    const edges = scene.edges.map((edge) =>
+    const edges = canonicalEdges.map((edge) =>
       `<path data-edge-id="${escapeMarkup(edge.id)}" data-semantic-kind="${escapeMarkup(edge.semanticKind)}" data-source="${escapeMarkup(edge.source)}" data-target="${escapeMarkup(edge.target)}"/>`
     ).join('');
     return {
@@ -57,7 +83,7 @@ export function project(scene: SceneIR, projection: ProjectionKind): ProjectionM
   const details = focusOrderedNodes.map((node) =>
     `<article id="${escapeMarkup(node.id)}" tabindex="-1" data-node-id="${escapeMarkup(node.id)}" data-semantic-kind="${escapeMarkup(node.semanticKind)}"><h2>${escapeMarkup(node.label)}</h2><p>${escapeMarkup(node.semanticKind)}</p>${closingArticleTag}`
   ).join('');
-  const relations = scene.edges.map((edge) =>
+  const relations = canonicalEdges.map((edge) =>
     `<li data-edge-id="${escapeMarkup(edge.id)}" data-semantic-kind="${escapeMarkup(edge.semanticKind)}"><a href="#${escapeMarkup(edge.source)}">${escapeMarkup(edge.source)}</a> → <a href="#${escapeMarkup(edge.target)}">${escapeMarkup(edge.target)}</a></li>`
   ).join('');
   return {

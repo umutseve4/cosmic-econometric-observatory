@@ -1,5 +1,10 @@
 import { compareCodePoints } from './canonical.js';
-import type { ProjectionKind, ProjectionManifestV2 } from './projections.js';
+import type {
+  ProjectionEdgeDescriptor,
+  ProjectionKind,
+  ProjectionManifestV2,
+  ProjectionNodeDescriptor
+} from './projections.js';
 
 export interface BrowserMountTarget<Node> {
   /** One final commit attempt. Mutation behavior if this method throws belongs to the target implementation. */
@@ -7,11 +12,13 @@ export interface BrowserMountTarget<Node> {
 }
 
 export interface PreparedBrowserProjection<Node> {
-  /** Roots are trusted output from the injected preparation port. */
+  /** Roots are detached output from the injected preparation port; their metadata is verified before commit. */
   readonly roots: readonly Node[];
   readonly nodeIds: readonly string[];
   readonly edgeIds: readonly string[];
   readonly focusOrderNodeIds: readonly string[];
+  readonly nodeDescriptors: readonly ProjectionNodeDescriptor[];
+  readonly edgeDescriptors: readonly ProjectionEdgeDescriptor[];
 }
 
 export interface BrowserDomPort<Node> {
@@ -85,6 +92,41 @@ function validateManifest(manifest: ProjectionManifestV2): void {
   if (!sameStrings(focusSet, manifest.nodeIds)) {
     throw new Error('BROWSER_RENDER_INVALID_MANIFEST:focusOrderNodeIds:node-set');
   }
+  validateNodeDescriptors(manifest.nodeDescriptors, manifest.nodeIds);
+  validateEdgeDescriptors(manifest.edgeDescriptors, manifest.edgeIds, new Set(manifest.nodeIds));
+}
+
+function validateNodeDescriptors(value: unknown, nodeIds: readonly string[]): asserts value is readonly ProjectionNodeDescriptor[] {
+  if (!Array.isArray(value) || value.some((entry) => !isExactStringRecord(entry, ['id', 'kind', 'label']))) {
+    throw new Error('BROWSER_RENDER_INVALID_MANIFEST:nodeDescriptors:shape');
+  }
+  const ids = value.map((entry) => (entry as ProjectionNodeDescriptor).id);
+  validateDescriptorOrder('nodeDescriptors', ids);
+  if (!sameStrings(ids, nodeIds)) throw new Error('BROWSER_RENDER_INVALID_MANIFEST:nodeDescriptors:id-parity');
+}
+
+function validateEdgeDescriptors(
+  value: unknown,
+  edgeIds: readonly string[],
+  nodeIds: ReadonlySet<string>
+): asserts value is readonly ProjectionEdgeDescriptor[] {
+  if (!Array.isArray(value) || value.some((entry) => !isExactStringRecord(entry, ['id', 'source', 'target']))) {
+    throw new Error('BROWSER_RENDER_INVALID_MANIFEST:edgeDescriptors:shape');
+  }
+  const descriptors = value as ProjectionEdgeDescriptor[];
+  const ids = descriptors.map((entry) => entry.id);
+  validateDescriptorOrder('edgeDescriptors', ids);
+  if (!sameStrings(ids, edgeIds)) throw new Error('BROWSER_RENDER_INVALID_MANIFEST:edgeDescriptors:id-parity');
+  if (descriptors.some(({ source, target }) => !nodeIds.has(source) || !nodeIds.has(target))) {
+    throw new Error('BROWSER_RENDER_INVALID_MANIFEST:edgeDescriptors:endpoints');
+  }
+}
+
+function validateDescriptorOrder(name: string, ids: readonly string[]): void {
+  if (new Set(ids).size !== ids.length) throw new Error(`BROWSER_RENDER_INVALID_MANIFEST:${name}:duplicate`);
+  if (!sameStrings([...ids].sort(compareCodePoints), ids)) {
+    throw new Error(`BROWSER_RENDER_INVALID_MANIFEST:${name}:unsorted`);
+  }
 }
 
 function validateSortedUnique(name: string, values: readonly string[]): void {
@@ -116,13 +158,23 @@ function validatePrepared<Node>(prepared: unknown, manifest: ProjectionManifestV
   if (!Array.isArray(prepared.roots) || prepared.roots.length === 0) {
     throw new Error(`BROWSER_RENDER_INVALID_CONTENT:${manifest.projection}:roots`);
   }
-  if (!isStringArray(prepared.nodeIds) || !isStringArray(prepared.edgeIds) || !isStringArray(prepared.focusOrderNodeIds)) {
+  if (!isStringArray(prepared.nodeIds)
+    || !isStringArray(prepared.edgeIds)
+    || !isStringArray(prepared.focusOrderNodeIds)
+    || !isNodeDescriptorArray(prepared.nodeDescriptors)
+    || !isEdgeDescriptorArray(prepared.edgeDescriptors)) {
     throw new Error(`BROWSER_RENDER_INVALID_CONTENT:${manifest.projection}:metadata`);
   }
   if (!sameStrings(prepared.nodeIds, manifest.nodeIds)) throw new Error('BROWSER_RENDER_NODE_IDS_MISMATCH');
   if (!sameStrings(prepared.edgeIds, manifest.edgeIds)) throw new Error('BROWSER_RENDER_EDGE_IDS_MISMATCH');
   if (!sameStrings(prepared.focusOrderNodeIds, manifest.focusOrderNodeIds)) {
     throw new Error('BROWSER_RENDER_FOCUS_ORDER_MISMATCH');
+  }
+  if (!sameNodeDescriptors(prepared.nodeDescriptors, manifest.nodeDescriptors)) {
+    throw new Error('BROWSER_RENDER_NODE_DESCRIPTORS_MISMATCH');
+  }
+  if (!sameEdgeDescriptors(prepared.edgeDescriptors, manifest.edgeDescriptors)) {
+    throw new Error('BROWSER_RENDER_EDGE_DESCRIPTORS_MISMATCH');
   }
 }
 
@@ -140,6 +192,8 @@ function parseAndValidateThreePayload(manifest: ProjectionManifestV2): unknown {
   const edges = payload.edges;
   if (nodes.some((node) => !isRecord(node)
     || typeof node.id !== 'string'
+    || typeof node.label !== 'string'
+    || typeof node.semanticKind !== 'string'
     || typeof node.focusOrder !== 'number'
     || !Number.isSafeInteger(node.focusOrder)
     || node.focusOrder < 1)) {
@@ -157,6 +211,14 @@ function parseAndValidateThreePayload(manifest: ProjectionManifestV2): unknown {
   if (!sameStrings(nodeIds, manifest.nodeIds)) throw new Error('BROWSER_RENDER_NODE_IDS_MISMATCH');
   if (!sameStrings(focusOrderNodeIds, manifest.focusOrderNodeIds)) throw new Error('BROWSER_RENDER_FOCUS_ORDER_MISMATCH');
 
+  const nodeDescriptors = nodes.map((node) => {
+    const record = node as Record<string, unknown>;
+    return { id: record.id as string, label: record.label as string, kind: record.semanticKind as string };
+  }).sort((left, right) => compareCodePoints(left.id, right.id));
+  if (!sameNodeDescriptors(nodeDescriptors, manifest.nodeDescriptors)) {
+    throw new Error('BROWSER_RENDER_NODE_DESCRIPTORS_MISMATCH');
+  }
+
   const nodeSet = new Set(nodeIdsUnsorted);
   if (edges.some((edge) => !isValidThreeEdge(edge, nodeSet))) {
     throw new Error('BROWSER_RENDER_INVALID_CONTENT:three:edges');
@@ -167,6 +229,13 @@ function parseAndValidateThreePayload(manifest: ProjectionManifestV2): unknown {
   }
   const edgeIds = [...edgeIdsUnsorted].sort(compareCodePoints);
   if (!sameStrings(edgeIds, manifest.edgeIds)) throw new Error('BROWSER_RENDER_EDGE_IDS_MISMATCH');
+  const edgeDescriptors = edges.map((edge) => {
+    const record = edge as Record<string, unknown>;
+    return { id: record.id as string, source: record.source as string, target: record.target as string };
+  }).sort((left, right) => compareCodePoints(left.id, right.id));
+  if (!sameEdgeDescriptors(edgeDescriptors, manifest.edgeDescriptors)) {
+    throw new Error('BROWSER_RENDER_EDGE_DESCRIPTORS_MISMATCH');
+  }
   return payload;
 }
 
@@ -180,6 +249,13 @@ function isValidThreeEdge(edge: unknown, nodeSet: ReadonlySet<string>): boolean 
     && nodeSet.has(target);
 }
 
+function isExactStringRecord(value: unknown, keys: readonly string[]): boolean {
+  if (!isRecord(value)) return false;
+  const actual = Object.keys(value).sort(compareCodePoints);
+  const expected = [...keys].sort(compareCodePoints);
+  return sameStrings(actual, expected) && expected.every((key) => typeof value[key] === 'string');
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
@@ -188,6 +264,28 @@ function isStringArray(value: unknown): value is readonly string[] {
   return Array.isArray(value) && value.every((entry) => typeof entry === 'string');
 }
 
+function isNodeDescriptorArray(value: unknown): value is readonly ProjectionNodeDescriptor[] {
+  return Array.isArray(value) && value.every((entry) => isExactStringRecord(entry, ['id', 'kind', 'label']));
+}
+
+function isEdgeDescriptorArray(value: unknown): value is readonly ProjectionEdgeDescriptor[] {
+  return Array.isArray(value) && value.every((entry) => isExactStringRecord(entry, ['id', 'source', 'target']));
+}
+
 function sameStrings(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function sameNodeDescriptors(left: readonly ProjectionNodeDescriptor[], right: readonly ProjectionNodeDescriptor[]): boolean {
+  return left.length === right.length && left.every((value, index) => {
+    const expected = right[index];
+    return expected !== undefined && value.id === expected.id && value.label === expected.label && value.kind === expected.kind;
+  });
+}
+
+function sameEdgeDescriptors(left: readonly ProjectionEdgeDescriptor[], right: readonly ProjectionEdgeDescriptor[]): boolean {
+  return left.length === right.length && left.every((value, index) => {
+    const expected = right[index];
+    return expected !== undefined && value.id === expected.id && value.source === expected.source && value.target === expected.target;
+  });
 }
