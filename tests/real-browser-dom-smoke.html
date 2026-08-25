@@ -4,7 +4,7 @@
 <body>
 <pre id="result">RUNNING</pre>
 <script type="module">
-import { createBrowserDomPreparationPort, project, renderProjection } from '../dist/src/index.js';
+import { createBrowserDomPort, project, renderProjection } from '../dist/src/index.js';
 
 const result = document.querySelector('#result');
 const hostileLabel = '<img src=x onerror="globalThis.__M3D_XSS__=1"> & <script>globalThis.__M3D_SCRIPT__=1<\/script>';
@@ -23,7 +23,7 @@ const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
 try {
   const htmlManifest = project(scene, 'html');
   const svgManifest = project(scene, 'svg');
-  const port = createBrowserDomPreparationPort(document);
+  const port = createBrowserDomPort(document);
   const htmlTarget = document.createElement('div');
   let htmlMounts = 0;
   const htmlReceipt = renderProjection(htmlManifest, { replaceChildren(...nodes) { htmlMounts += 1; htmlTarget.replaceChildren(...nodes); } }, { dom: port });
@@ -65,7 +65,12 @@ try {
   let rejected = false;
   try {
     renderProjection({ ...htmlManifest, content: nestedActiveContent }, { replaceChildren() { hostileMounts += 1; } }, { dom: port });
-  } catch (error) { rejected = error instanceof Error && error.message === 'BROWSER_DOM_INVALID_CONTENT:html:element:SPAN'; }
+  } catch (error) {
+    rejected = error instanceof Error &&
+      error.message === 'BROWSER_RENDER_INVALID_CONTENT:html:prepare-failed' &&
+      error.cause instanceof Error &&
+      error.cause.message === 'BROWSER_DOM_INVALID_CONTENT:html:element';
+  }
   assert(rejected, 'nested active content was not rejected');
   assert(hostileMounts === 0, 'nested active content reached target');
   assert(globalThis.__M3D_NESTED__ === undefined, 'nested active content executed');
