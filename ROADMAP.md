@@ -58,13 +58,13 @@
 - Preserve bounded M3b renderer regressions and full existing M3d real-Chromium smoke security and SVG namespace coverage through browser-safe direct module imports.
 - Verified at squash merge `168a44922b204c9afe4c5f3d8305d877f912ac7b` with exact-main push CI [run `32868471602`](https://api.github.com/repos/umutseve4/cosmic-econometric-observatory/actions/runs/32868471602) and [job `97869472712`](https://api.github.com/repos/umutseve4/cosmic-econometric-observatory/actions/jobs/97869472712), completed successfully.
 
-### M3f — Bounded Three.js/WebGL vertical slice (Merged; exact-main CI evidence pending)
+### M3f — Bounded Three.js/WebGL vertical slice (Verified on closure SHA)
 - Exact-pin `three@0.185.1` and translate the canonical Three DTO into a detached deterministic scene.
 - Render exactly one `320×240` frame, preserve semantic descriptor/focus-order parity, and dispose GPU resources on covered success and preparation-failure paths; disposal-throw resilience remains deferred.
 - Keep the canvas out of the accessibility tree while HTML/SVG retain the semantic surface.
 - Real Chromium/SwiftShader smoke verifies `2` nodes, `1` edge, a live WebGL context, `NO_ERROR`, forced WebGL failure rejection, and `0` target mounts on failed preparation.
-- Squash-merged as `5137f812e4f5733039e1880f4dd8b89b7b66c517` after PR-head CI [run `32878695626`](https://github.com/umutseve4/cosmic-econometric-observatory/actions/runs/32878695626), [job `97902742320`](https://github.com/umutseve4/cosmic-econometric-observatory/actions/runs/32878695626/job/97902742320), completed successfully from `2026-08-25T17:34:41Z` to `2026-08-25T17:35:03Z`.
-- Do not relabel this slice `Verified` until an exact-main native push-CI run for the merge SHA is observed.
+- Original implementation squash-merged as `5137f812e4f5733039e1880f4dd8b89b7b66c517` after PR-head CI [run `32878695626`](https://github.com/umutseve4/cosmic-econometric-observatory/actions/runs/32878695626), [job `97902742320`](https://github.com/umutseve4/cosmic-econometric-observatory/actions/runs/32878695626/job/97902742320), completed successfully from `2026-08-25T17:34:41Z` to `2026-08-25T17:35:03Z`; no exact-main native push-CI result is claimed for that historical merge SHA.
+- Closure/hardening squash merge `6daa4b3ba9e6941335d081bed1a15266ff5f2011` contains the M3f implementation and bounds browser process-tree/handle release plus HTTP server shutdown. Its exact-main native push CI [run `32895153509`](https://github.com/umutseve4/cosmic-econometric-observatory/actions/runs/32895153509), [job `97955989072`](https://github.com/umutseve4/cosmic-econometric-observatory/actions/runs/32895153509/job/97955989072), suite `89112873525`, completed successfully from `2026-08-25T20:24:30Z` to `2026-08-25T20:24:53Z` with `0` annotations. This verifies the closure tree without retroactively attributing a run to the historical implementation merge.
 
 ### Deferred M3 slices
 - Continuous rendering, camera/selection interaction, responsive application shell, cross-browser and assistive-technology validation, production-scale performance, disposal-throw resilience, failure fallback orchestration, and deployment remain deferred.
