@@ -34,12 +34,20 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - name: Apply exact staged patch without workflow cleanup
+      - name: Apply exact staged patch or capture error
         run: |
-          set -euo pipefail
-          sed -n "python <<'PY'/,/^          PY$/p" .github/workflows/apply-m2a-alias-fix.yml | sed '1d;$d;s/^          //' > /tmp/apply.py
+          set -u
+          sed -n "/python <<'PY'/,/^          PY$/p" .github/workflows/apply-m2a-alias-fix.yml | sed '1d;$d;s/^          //' > /tmp/apply.py
           sed -i "/Path('.github\/workflows\/apply-m2a-alias-fix.yml').unlink()/d" /tmp/apply.py
-          python /tmp/apply.py
+          if ! python /tmp/apply.py > /tmp/patch.log 2>&1; then
+            cp /tmp/patch.log PATCH_ERROR.txt
+            git config user.name github-actions[bot]
+            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+            git add PATCH_ERROR.txt
+            git commit -m "chore: capture M2a patch failure"
+            git push origin HEAD:feat/m2a-curriculum-graph-core
+            exit 1
+          fi
       - run: npm ci --ignore-scripts
       - run: npm run verify
       - name: Commit verified source patch
