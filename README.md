@@ -33,7 +33,7 @@ M2a compiles the source-backed institution, Econometrics program, 2025–2026 cu
 
 - Every `144` `CurriculumRelation` record is projected exactly once with semester, status, ECTS, optional pool, and provenance.
 - Insertion-only evolution accepts a complete previous `CurriculumCompilation`; the previous graph, `AnchorManifestV1`, and `RouteManifestV1` are hash-bound and must have exact node-set parity.
-- Retained anchors, slots, coordinates, canonical routes, and aliases remain byte-for-byte unchanged; missing or tampered history is rejected rather than regenerated.
+- Retained anchors, slots, coordinates, and canonical `/v1/nodes/{persistent-id}` URLs remain stable. Course aliases form a monotonic, deterministic, code-point-sorted union of previous and current code assignments; aliases are never deleted.
 - `RouteManifestV1` derives canonical `/v1/nodes/{persistent-id}` URLs from stable identity; course codes are aliases only.
 - Input ordering and locale cannot alter canonical output.
 - Duplicate/dangling identities, malformed or mixed provenance, unknown anomaly references, silent relation drift, prior-node removal, and tampered previous state are fatal.

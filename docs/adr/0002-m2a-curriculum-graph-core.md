@@ -14,7 +14,7 @@ The compiler emits three canonical JSON-safe artifacts:
 2. `AnchorManifestV1` using `content-addressed-slots-v1`.
 3. `RouteManifestV1` with canonical `/v1/nodes/{persistent-id}` routes.
 
-Insertion-only evolution accepts a complete previous `CurriculumCompilation`, never a detached anchor manifest. The compiler recomputes the previous graph hash, requires both manifests to reference it, requires exact graph/anchor/route node-set parity, validates every prior coordinate and semantic route, and rejects removal of a prior node. Retained anchors and routes remain byte-for-byte unchanged; only new nodes receive deterministic collision-resolved slots and routes. Hidden mutable allocation state is forbidden. Course-code routes are aliases and never identity.
+Insertion-only evolution accepts a complete previous `CurriculumCompilation`, never a detached anchor manifest. The compiler recomputes the previous graph hash, requires both manifests to reference it, requires exact graph/anchor/route node-set parity, validates every prior coordinate and semantic route, and rejects removal of a prior node. Retained anchors and canonical `/v1/nodes/{persistent-id}` URLs remain stable. Course aliases form a monotonic, deterministic, code-point-sorted union of previous and current code assignments and are never deleted; only new nodes receive deterministic collision-resolved slots and routes. Hidden mutable allocation state is forbidden. Course-code routes are aliases and never identity.
 
 ## Safety and provenance gates
 

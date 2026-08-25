@@ -5,7 +5,7 @@ import test from 'node:test';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Anomaly, BuuSnapshot, Course, CurriculumCompilation, CurriculumRelation } from '../src/index.js';
-import { canonicalCompilation, canonicalize, compileBuuCurriculum, importBuuSnapshot } from '../src/index.js';
+import { canonicalCompilation, canonicalize, compareCodePoints, compileBuuCurriculum, importBuuSnapshot } from '../src/index.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const fixture = join(root, 'vendor/legacy/eko-rasathane/db8d52f0b29d712c34e8b7487e2299ce9f75c266');
@@ -22,6 +22,14 @@ function expandedSnapshot(): BuuSnapshot {
 
 function replacePrevious(previous: CurriculumCompilation, replacement: Partial<CurriculumCompilation>): CurriculumCompilation {
   return { ...previous, ...replacement };
+}
+
+function anchorFor(compilation: CurriculumCompilation, nodeId: string) {
+  return compilation.anchorManifest.anchors.find((anchor) => anchor.nodeId === nodeId)!;
+}
+
+function routeFor(compilation: CurriculumCompilation, nodeId: string) {
+  return compilation.routeManifest.routes.find((route) => route.nodeId === nodeId)!;
 }
 
 test('compiles the exact source-backed M2a curriculum graph', () => {
@@ -54,6 +62,20 @@ test('same input and reordered input compile to byte-identical output', () => {
   assert.equal(canonicalCompilation(compileBuuCurriculum(reordered)), baseline);
 });
 
+test('reordered course codeAssignments compile to byte-identical output', () => {
+  const target = snapshot.courses.find((course) => course.codeAssignments[0]?.value === 'EKO3310')!;
+  const assignments = [...target.codeAssignments, { value: 'EKO3310B', validFrom: '2026-09-01' }];
+  const withAssignments: BuuSnapshot = {
+    ...snapshot,
+    courses: snapshot.courses.map((course) => course.id === target.id ? { ...course, codeAssignments: assignments } : course)
+  };
+  const reordered: BuuSnapshot = {
+    ...withAssignments,
+    courses: withAssignments.courses.map((course) => course.id === target.id ? { ...course, codeAssignments: [...course.codeAssignments].reverse() } : course)
+  };
+  assert.equal(canonicalCompilation(compileBuuCurriculum(reordered)), canonicalCompilation(compileBuuCurriculum(withAssignments)));
+});
+
 test('synthetic insertion preserves every unaffected anchor, coordinate and canonical URL byte-for-byte', () => {
   const baseline = compileBuuCurriculum(snapshot);
   const next = compileBuuCurriculum(expandedSnapshot(), baseline);
@@ -63,6 +85,39 @@ test('synthetic insertion preserves every unaffected anchor, coordinate and cano
   for (const route of baseline.routeManifest.routes) assert.deepEqual(nextRoutes.get(route.nodeId), route);
   assert.equal(next.anchorManifest.anchors.length, baseline.anchorManifest.anchors.length + 1);
   assert.equal(next.routeManifest.routes.length, baseline.routeManifest.routes.length + 1);
+});
+
+test('title-only evolution preserves the retained anchor and canonical URL', () => {
+  const baseline = compileBuuCurriculum(snapshot);
+  const course = snapshot.courses.find((item) => item.codeAssignments[0]?.value === 'EKO3310')!;
+  const evolved: BuuSnapshot = {
+    ...snapshot,
+    courses: snapshot.courses.map((item) => item.id === course.id ? { ...item, canonicalTitle: `${item.canonicalTitle} (Revised)` } : item)
+  };
+  const next = compileBuuCurriculum(evolved, baseline);
+  assert.deepEqual(anchorFor(next, course.id), anchorFor(baseline, course.id));
+  assert.equal(routeFor(next, course.id).canonicalUrl, routeFor(baseline, course.id).canonicalUrl);
+  assert.equal(next.graph.nodes.find((node) => node.id === course.id)!.label, `${course.canonicalTitle} (Revised)`);
+});
+
+test('code-only evolution preserves identity routes and monotonically unions aliases', () => {
+  const baseline = compileBuuCurriculum(snapshot);
+  const course = snapshot.courses.find((item) => item.codeAssignments[0]?.value === 'EKO3310')!;
+  const evolved: BuuSnapshot = {
+    ...snapshot,
+    courses: snapshot.courses.map((item) => item.id === course.id
+      ? { ...item, codeAssignments: [{ value: 'EKO3310Y', validFrom: '2026-09-01' }] }
+      : item)
+  };
+  const next = compileBuuCurriculum(evolved, baseline);
+  const previousRoute = routeFor(baseline, course.id);
+  const nextRoute = routeFor(next, course.id);
+  const newAlias = `/v1/courses/eko3310y/${encodeURIComponent(course.id)}`;
+  assert.deepEqual(anchorFor(next, course.id), anchorFor(baseline, course.id));
+  assert.equal(nextRoute.canonicalUrl, previousRoute.canonicalUrl);
+  assert.ok(nextRoute.aliases.includes(previousRoute.aliases[0]!));
+  assert.ok(nextRoute.aliases.includes(newAlias));
+  assert.deepEqual(nextRoute.aliases, [...new Set([...previousRoute.aliases, newAlias])].sort(compareCodePoints));
 });
 
 test('canonical routes use persistent IDs and human course codes are aliases only', () => {
@@ -100,6 +155,9 @@ test('duplicate, dangling and malformed provenance inputs are fatal', () => {
   const mixed: readonly CurriculumRelation[] = snapshot.curriculumRelations.map((relation, index) => index === 0 ? { ...relation, provenance: { ...relation.provenance, snapshotId: 'snapshot:other' } } : relation);
   assert.throws(() => compileBuuCurriculum({ ...snapshot, curriculumRelations: mixed }), /Mixed curriculum source provenance/);
 
+  const mixedTransformation: readonly CurriculumRelation[] = snapshot.curriculumRelations.map((relation, index) => index === 0 ? { ...relation, provenance: { ...relation.provenance, transformationVersion: 'm1-buu-import-other' } } : relation);
+  assert.throws(() => compileBuuCurriculum({ ...snapshot, curriculumRelations: mixedTransformation }), /Mixed curriculum source provenance/);
+
   const mixedCourse: Course = { ...snapshot.courses[0]!, provenance: { ...snapshot.courses[0]!.provenance, snapshotId: 'snapshot:other' } };
   assert.throws(() => compileBuuCurriculum({ ...snapshot, courses: [mixedCourse, ...snapshot.courses.slice(1)] }), /Mixed curriculum source provenance/);
 });
@@ -123,10 +181,11 @@ test('missing or tampered previous graph, anchor and route history is fatal', ()
   const changedHash = replacePrevious(baseline, { anchorManifest: { ...baseline.anchorManifest, graphHash: 'sha256:0000000000000000000000000000000000000000000000000000000000000000' } });
   assert.throws(() => compileBuuCurriculum(snapshot, changedHash), /hash mismatch/);
 
-  const changedGraph = replacePrevious(baseline, { graph: { ...baseline.graph, nodes: baseline.graph.nodes.map((node, index) => index === 0 ? { ...node, label: `${node.label} tampered` } : node) } });
+  const immutableNodeIndex = baseline.graph.nodes.findIndex((node) => node.kind !== 'course');
+  const changedGraph = replacePrevious(baseline, { graph: { ...baseline.graph, nodes: baseline.graph.nodes.map((node, index) => index === immutableNodeIndex ? { ...node, label: `${node.label} tampered` } : node) } });
   assert.throws(() => compileBuuCurriculum(snapshot, changedGraph), /hash mismatch/);
 
-  const coordinatedGraph = { ...baseline.graph, nodes: baseline.graph.nodes.map((node, index) => index === 0 ? { ...node, label: `${node.label} tampered` } : node) };
+  const coordinatedGraph = { ...baseline.graph, nodes: baseline.graph.nodes.map((node, index) => index === immutableNodeIndex ? { ...node, label: `${node.label} tampered` } : node) };
   const coordinatedHash = `sha256:${createHash('sha256').update(canonicalize(coordinatedGraph)).digest('hex')}` as const;
   const coordinatedNodeTampering = replacePrevious(baseline, {
     graph: coordinatedGraph,

@@ -97,8 +97,8 @@ export function compileBuuCurriculum(snapshot: BuuSnapshot, previous?: Curriculu
       id: course.id,
       kind: 'course',
       label: course.canonicalTitle,
-      provenance: course.provenance,
-      codeAssignments: course.codeAssignments.map((assignment) => ({ ...assignment }))
+      provenance: normalizeProvenance(course.provenance),
+      codeAssignments: sortCanonical(course.codeAssignments).map((assignment) => ({ ...assignment }))
     }))
   ];
   nodes.sort(compareNodes);
@@ -111,7 +111,7 @@ export function compileBuuCurriculum(snapshot: BuuSnapshot, previous?: Curriculu
       kind: 'CONTAINS',
       source: CURRICULUM_ID,
       target: relation.courseId,
-      provenance: relation.provenance,
+      provenance: normalizeProvenance(relation.provenance),
       curriculumRelation: {
         id: relation.id,
         semester: relation.semester,
@@ -126,6 +126,7 @@ export function compileBuuCurriculum(snapshot: BuuSnapshot, previous?: Curriculu
   const domainIds = new Set<string>([CURRICULUM_ID, ...courses.map((course) => course.id), ...relations.map((relation) => relation.id)]);
   const anomalies = snapshot.anomalies
     .filter((anomaly) => anomaly.entityRefs.length > 0 && anomaly.entityRefs.every((id) => domainIds.has(id)))
+    .map(normalizeAnomaly)
     .sort((a, b) => compareCodePoints(a.id, b.id));
   assertUnique(anomalies.map((anomaly) => anomaly.id), 'anomaly');
 
@@ -205,10 +206,7 @@ function validatePreviousCompilation(previous: CurriculumCompilation): void {
     occupied.add(anchor.slot);
     if (canonicalize(anchor.position) !== canonicalize(positionFor(node.kind, anchor.slot))) throw new Error(`Previous anchor coordinate drift: ${anchor.nodeId}`);
   }
-  for (const route of previous.routeManifest.routes) {
-    const node = nodeById.get(route.nodeId)!;
-    if (canonicalize(route) !== canonicalize(routeFor(node))) throw new Error(`Previous route drift: ${route.nodeId}`);
-  }
+  for (const route of previous.routeManifest.routes) validatePreviousRoute(nodeById.get(route.nodeId)!, route);
 }
 
 function assertInsertionOnlyEvolution(previous: CurriculumGraph, current: CurriculumGraph): void {
@@ -216,7 +214,7 @@ function assertInsertionOnlyEvolution(previous: CurriculumGraph, current: Curric
   for (const node of previous.nodes) {
     const retained = currentNodes.get(node.id);
     if (retained === undefined) throw new Error(`Insertion-only history removed node: ${node.id}`);
-    if (canonicalize(retained) !== canonicalize(node)) throw new Error(`Insertion-only history changed node: ${node.id}`);
+    if (canonicalize(immutableNodeSemantics(retained)) !== canonicalize(immutableNodeSemantics(node))) throw new Error(`Insertion-only history changed node: ${node.id}`);
   }
 
   const currentEdges = new Map(current.edges.map((edge) => [edge.id, edge] as const));
@@ -273,7 +271,16 @@ function allocateAnchors(nodes: readonly CurriculumGraphNode[], graphHash: `sha2
 
 function compileRoutes(nodes: readonly CurriculumGraphNode[], graphHash: `sha256:${string}`, previous?: RouteManifestV1): RouteManifestV1 {
   const retained = new Map(previous?.routes.map((route) => [route.nodeId, route] as const) ?? []);
-  const routes = [...nodes].sort(compareNodes).map((node) => retained.get(node.id) ?? routeFor(node));
+  const routes = [...nodes].sort(compareNodes).map((node): RouteEntry => {
+    const current = routeFor(node);
+    const prior = retained.get(node.id);
+    if (prior === undefined) return current;
+    return {
+      nodeId: node.id,
+      canonicalUrl: prior.canonicalUrl,
+      aliases: [...new Set([...prior.aliases, ...current.aliases])].sort(compareCodePoints)
+    };
+  });
   assertUnique(routes.map((route) => route.canonicalUrl), 'canonical route');
   return { schemaVersion: ROUTE_SCHEMA_VERSION, compilerVersion: M2_COMPILER_VERSION, graphHash, routes };
 }
@@ -283,6 +290,58 @@ function routeFor(node: CurriculumGraphNode): RouteEntry {
     ? [...new Set((node.codeAssignments ?? []).map((assignment) => `/v1/courses/${encodeURIComponent(assignment.value.toLowerCase())}/${encodeURIComponent(node.id)}`))].sort(compareCodePoints)
     : [];
   return { nodeId: node.id, canonicalUrl: `/v1/nodes/${encodeURIComponent(node.id)}`, aliases };
+}
+
+function validatePreviousRoute(node: CurriculumGraphNode, route: RouteEntry): void {
+  const expected = routeFor(node);
+  const normalizedAliases = [...new Set(route.aliases)].sort(compareCodePoints);
+  const aliases = new Set(route.aliases);
+  const malformedAlias = node.kind === 'course'
+    ? route.aliases.some((alias) => !isCourseAliasForNode(alias, node.id))
+    : route.aliases.length > 0;
+  if (route.nodeId !== expected.nodeId || route.canonicalUrl !== expected.canonicalUrl ||
+      canonicalize(route.aliases) !== canonicalize(normalizedAliases) || malformedAlias ||
+      expected.aliases.some((alias) => !aliases.has(alias))) {
+    throw new Error(`Previous route drift: ${route.nodeId}`);
+  }
+}
+
+function isCourseAliasForNode(alias: string, nodeId: string): boolean {
+  const prefix = '/v1/courses/';
+  const suffix = `/${encodeURIComponent(nodeId)}`;
+  if (!alias.startsWith(prefix) || !alias.endsWith(suffix)) return false;
+  const encodedCode = alias.slice(prefix.length, alias.length - suffix.length);
+  if (encodedCode.length === 0 || encodedCode.includes('/')) return false;
+  try {
+    const code = decodeURIComponent(encodedCode);
+    return code.length > 0 && encodedCode === encodeURIComponent(code.toLowerCase());
+  } catch {
+    return false;
+  }
+}
+
+function immutableNodeSemantics(node: CurriculumGraphNode): object {
+  if (node.kind !== 'course') return node;
+  const { label: _label, codeAssignments: _codeAssignments, ...immutable } = node;
+  return immutable;
+}
+
+function normalizeProvenance(provenance: Provenance): Provenance {
+  const normalized = { ...provenance };
+  if (provenance.derivedFrom !== undefined) normalized.derivedFrom = [...provenance.derivedFrom].sort(compareCodePoints);
+  return normalized;
+}
+
+function normalizeAnomaly(anomaly: Anomaly): Anomaly {
+  return {
+    ...anomaly,
+    entityRefs: [...anomaly.entityRefs].sort(compareCodePoints),
+    evidence: sortCanonical(anomaly.evidence)
+  };
+}
+
+function sortCanonical<T>(values: readonly T[]): T[] {
+  return [...values].sort((a, b) => compareCodePoints(canonicalize(a), canonicalize(b)));
 }
 
 function compilerProvenance(relations: readonly CurriculumRelation[]): Provenance {
@@ -306,7 +365,7 @@ function assertProvenance(provenance: Provenance, id: string): void {
 }
 
 function sourceTuple(provenance: Provenance): string {
-  return canonicalize({ sourceId: provenance.sourceId, snapshotId: provenance.snapshotId, observedAt: provenance.observedAt, contentHash: provenance.contentHash });
+  return canonicalize({ sourceId: provenance.sourceId, snapshotId: provenance.snapshotId, observedAt: provenance.observedAt, contentHash: provenance.contentHash, transformationVersion: provenance.transformationVersion });
 }
 
 function assertUnique<T extends string | number>(values: readonly T[], label: string): Set<T> {
