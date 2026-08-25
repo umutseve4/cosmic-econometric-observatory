@@ -13,11 +13,12 @@
 - Verified at squash merge `f88c43a8338dce3f31ea4876f3d20d88770a8464` with post-merge CI run `32767161943`.
 
 ## M2 — Curriculum compiler (in progress)
-### M2a — Deterministic curriculum graph core
+### M2a — Deterministic curriculum graph core (Verified)
 - Source-backed institution/program/curriculum/course graph; all `144` curriculum relations projected exactly once.
 - Versioned, explicit `AnchorManifestV1` and `RouteManifestV1` artifacts.
 - Previous-manifest allocation preserves unaffected anchors; persistent-ID canonical routes survive title/code changes.
-- Exit: adding a course does not reposition unaffected anchored systems; exact-head CI and independent QA pass.
+- Course assignment history is cumulative and immutable; aliases are the exact deterministic projection of graph assignments, rejecting forged predecessor aliases.
+- Verified at squash merge `6aae3972281436d40f04ecffdc48852bf1babf8a` with post-merge CI run `32831488629`, job `97750957612`, and independent evidence-only security QA PASS with no HIGH/CRITICAL findings.
 
 ### Deferred M2 slices
 - Topic and laboratory nodes require pinned source evidence before compilation.
