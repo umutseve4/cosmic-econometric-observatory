@@ -62,9 +62,24 @@ M3b adds a dependency-free boundary between projection manifests and an injected
 - Pre-commit failures do not invoke the target. After all checks pass, the adapter makes exactly one `replaceChildren()` commit attempt.
 - If the injected target mutates and then throws, rollback is outside the adapter contract.
 - Port-produced root nodes remain a trusted-port boundary; their semantic metadata is runtime-validated.
-- This is not a concrete DOM parser or sanitizer, a Three.js/WebGL renderer, deployment, styling, interaction, or assistive-technology conformance.
 
-Concrete browser/DOM and Three.js/WebGL implementations, visual interaction, assistive-technology validation and deployment remain later M3 slices.
+## M3c–M3e — Concrete parsing and trusted semantic parity
+
+- An allow-listed DOM adapter parses generated HTML/SVG into detached content and rejects active or unexpected structure before mount.
+- A real headless Chromium smoke covers parser behavior, hostile-label escaping, namespace correctness, semantic parity and exact mutation counts.
+- Manifest and prepared node/edge descriptors are independently reconstructed and compared before target mutation.
+
+## M3f — Bounded Three.js/WebGL vertical slice
+
+M3f adds an exact-pinned `three@0.185.1` adapter without claiming a production renderer.
+
+- Canonical Three DTOs are validated and prepared off-target into a detached scene.
+- A deterministic `320×240`, one-frame WebGL render preserves semantic node/edge descriptors and focus order.
+- GPU geometries, materials and renderer resources are disposed on covered success and preparation-failure paths; disposal-throw resilience is not yet claimed.
+- The canvas is `aria-hidden="true"`; accessible semantics remain the responsibility of the equivalent HTML/SVG surfaces.
+- A real Chromium/SwiftShader smoke verifies `2` nodes, `1` edge, WebGL context health, `NO_ERROR`, forced-renderer rejection and `0` target mounts on preparation failure.
+
+This is intentionally not a continuous render loop, camera controls, picking, responsive application shell, cross-browser/assistive-technology conformance, or deployment.
 
 ## Verify
 
@@ -73,8 +88,9 @@ Requires Node.js 22 or newer. The dependency graph is locked.
 ```sh
 npm ci --ignore-scripts
 npm run verify
+npm run test:browser-smoke
 ```
 
-The standard verification gate includes type checking, build, M0/M1/M2 domain tests, materializer safety tests, fixture integrity, environment determinism, and legacy-isolation tests.
+The standard verification gate includes type checking, build, M0/M1/M2 domain tests, materializer safety tests, fixture integrity, environment determinism, legacy isolation, renderer regressions, and real-Chromium DOM/WebGL smoke tests.
 
-A production WebGL renderer, scraping, databases, user accounts, and LLM/RAG integration are not yet implemented.
+A production interactive WebGL renderer, scraping, databases, user accounts, and LLM/RAG integration are not yet implemented.

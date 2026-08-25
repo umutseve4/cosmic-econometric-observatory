@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { createReadStream, statSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { extname, normalize, resolve, sep } from 'node:path';
+import { closeServerBounded, usesDetachedProcessGroup, waitForBrowserExit } from './browser-smoke-process.mjs';
 
 const root = resolve(process.cwd());
 const chrome = process.env.CHROME_BIN || 'google-chrome';
@@ -36,18 +37,13 @@ const server = createServer((request, response) => {
 });
 
 const timeoutMs = 60_000;
-let browser;
-const timeout = setTimeout(() => {
-  browser?.kill('SIGKILL');
-  server.close();
-  console.error(`real-browser smoke timed out after ${timeoutMs}ms`);
-  process.exitCode = 1;
-}, timeoutMs);
+const shutdownGraceMs = 2_000;
 
 async function runCase(testCase, port) {
   const url = `http://127.0.0.1:${port}/${testCase.page}`;
-  browser = spawn(chrome, ['--headless=new', '--no-sandbox', ...testCase.flags, '--dump-dom', url], {
-    stdio: ['ignore', 'pipe', 'pipe']
+  const browser = spawn(chrome, ['--headless=new', '--no-sandbox', ...testCase.flags, '--dump-dom', url], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    detached: usesDetachedProcessGroup
   });
   let stdout = '';
   let stderr = '';
@@ -55,10 +51,7 @@ async function runCase(testCase, port) {
   browser.stderr.setEncoding('utf8');
   browser.stdout.on('data', (chunk) => { stdout += chunk; });
   browser.stderr.on('data', (chunk) => { stderr += chunk; });
-  const exit = await new Promise((resolveExit, rejectExit) => {
-    browser.once('error', rejectExit);
-    browser.once('close', (code, signal) => resolveExit({ code, signal }));
-  });
+  const exit = await waitForBrowserExit(browser, testCase.page, { timeoutMs, shutdownGraceMs });
   if (exit.code !== 0 || exit.signal !== null) throw new Error(`Chrome failed for ${testCase.page}: code=${String(exit.code)} signal=${String(exit.signal)}\n${stderr}`);
   const resultMatch = stdout.match(/<pre id="result">([\s\S]*?)<\/pre>/u);
   if (resultMatch === null) throw new Error(`browser page did not serialize #result for ${testCase.page}\n${stdout}\n${stderr}`);
@@ -77,6 +70,5 @@ try {
   if (address === null || typeof address === 'string') throw new Error('ephemeral port unavailable');
   for (const testCase of cases) await runCase(testCase, address.port);
 } finally {
-  clearTimeout(timeout);
-  await new Promise((resolveClose) => server.close(resolveClose));
+  await closeServerBounded(server, shutdownGraceMs);
 }

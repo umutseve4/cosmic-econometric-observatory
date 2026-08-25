@@ -58,8 +58,16 @@
 - Preserve bounded M3b renderer regressions and full existing M3d real-Chromium smoke security and SVG namespace coverage through browser-safe direct module imports.
 - Verified at squash merge `168a44922b204c9afe4c5f3d8305d877f912ac7b` with exact-main push CI [run `32868471602`](https://api.github.com/repos/umutseve4/cosmic-econometric-observatory/actions/runs/32868471602) and [job `97869472712`](https://api.github.com/repos/umutseve4/cosmic-econometric-observatory/actions/jobs/97869472712), completed successfully.
 
+### M3f — Bounded Three.js/WebGL vertical slice (Merged; exact-main CI evidence pending)
+- Exact-pin `three@0.185.1` and translate the canonical Three DTO into a detached deterministic scene.
+- Render exactly one `320×240` frame, preserve semantic descriptor/focus-order parity, and dispose GPU resources on covered success and preparation-failure paths; disposal-throw resilience remains deferred.
+- Keep the canvas out of the accessibility tree while HTML/SVG retain the semantic surface.
+- Real Chromium/SwiftShader smoke verifies `2` nodes, `1` edge, a live WebGL context, `NO_ERROR`, forced WebGL failure rejection, and `0` target mounts on failed preparation.
+- Squash-merged as `5137f812e4f5733039e1880f4dd8b89b7b66c517` after PR-head CI [run `32878695626`](https://github.com/umutseve4/cosmic-econometric-observatory/actions/runs/32878695626), [job `97902742320`](https://github.com/umutseve4/cosmic-econometric-observatory/actions/runs/32878695626/job/97902742320), completed successfully from `2026-08-25T17:34:41Z` to `2026-08-25T17:35:03Z`.
+- Do not relabel this slice `Verified` until an exact-main native push-CI run for the merge SHA is observed.
+
 ### Deferred M3 slices
-- Concrete Three.js/WebGL implementation, visual interaction, cross-browser and assistive-technology validation, and deployment remain deferred.
+- Continuous rendering, camera/selection interaction, responsive application shell, cross-browser and assistive-technology validation, production-scale performance, disposal-throw resilience, failure fallback orchestration, and deployment remain deferred.
 
 ### M3 exit
 - WebGL/Three.js renderer, SVG/HTML parity and screen-reader traversal.
