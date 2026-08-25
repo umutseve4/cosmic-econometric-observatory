@@ -175,26 +175,40 @@ test('rejects hostile prepared-port output with stable errors', () => {
 
 type ThreeFixturePayload = {
   nodes: { focusOrder: number }[];
-  edges: { source: string }[];
+  edges: { source: string; target?: unknown }[];
 };
 
-test('rejects invalid Three focus orders and edge endpoints before any port or target call', () => {
-  const mutations: readonly ((payload: ThreeFixturePayload) => void)[] = [
-    (payload) => { payload.nodes[0]!.focusOrder = 0; },
-    (payload) => { payload.edges[0]!.source = 'node:missing'; }
-  ];
-  for (const mutate of mutations) {
+const invalidThreePayloadCases: readonly [
+  string,
+  (payload: ThreeFixturePayload) => void,
+  string
+][] = [
+  ['zero focus order', (payload) => { payload.nodes[0]!.focusOrder = 0; }, 'BROWSER_RENDER_INVALID_CONTENT:three:nodes'],
+  ['fractional focus order', (payload) => { payload.nodes[0]!.focusOrder = 1.5; }, 'BROWSER_RENDER_INVALID_CONTENT:three:nodes'],
+  ['unsafe focus order', (payload) => { payload.nodes[0]!.focusOrder = Number.MAX_SAFE_INTEGER + 1; }, 'BROWSER_RENDER_INVALID_CONTENT:three:nodes'],
+  ['duplicate focus order', (payload) => { payload.nodes[1]!.focusOrder = payload.nodes[0]!.focusOrder; }, 'BROWSER_RENDER_INVALID_CONTENT:three:nodes'],
+  ['dangling edge source', (payload) => { payload.edges[0]!.source = 'node:missing'; }, 'BROWSER_RENDER_INVALID_CONTENT:three:edges'],
+  ['missing edge target', (payload) => { delete payload.edges[0]!.target; }, 'BROWSER_RENDER_INVALID_CONTENT:three:edges'],
+  ['malformed edge target', (payload) => { payload.edges[0]!.target = 42; }, 'BROWSER_RENDER_INVALID_CONTENT:three:edges'],
+  ['dangling edge target', (payload) => { payload.edges[0]!.target = 'node:missing'; }, 'BROWSER_RENDER_INVALID_CONTENT:three:edges']
+];
+
+for (const [name, mutate, message] of invalidThreePayloadCases) {
+  test(`rejects ${name} before any Three port or target call`, () => {
     const original = project(scene, 'three');
     const payload = JSON.parse(original.content) as ThreeFixturePayload;
     mutate(payload);
     let portCalls = 0;
     const mount = target();
     const customPorts = ports({ three: { prepareThree() { portCalls += 1; return prepared('three'); } } });
-    assert.throws(() => renderProjection({ ...original, content: JSON.stringify(payload) }, mount, customPorts), /BROWSER_RENDER_INVALID_CONTENT:three:(nodes|edges)/);
+    assert.throws(() => renderProjection({ ...original, content: JSON.stringify(payload) }, mount, customPorts), (error: unknown) => {
+      assert.equal((error as Error).message, message);
+      return true;
+    });
     assert.equal(portCalls, 0);
     assert.equal(mount.calls.length, 0);
-  }
-});
+  });
+}
 
 test('makes one target commit attempt and does not claim rollback if the target throws after mutation', () => {
   const calls: FakeNode[][] = [];
