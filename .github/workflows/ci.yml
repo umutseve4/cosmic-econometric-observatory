@@ -1,29 +1,23 @@
-name: M2a QA hardening
+name: CI
 
 on:
+  push:
+    branches: [main]
   pull_request:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  harden:
+  verify:
     runs-on: ubuntu-latest
-    if: github.actor != 'github-actions[bot]'
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          ref: feat/m2a-curriculum-graph-core
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Apply exact source and test hardening
-        run: python .github/scripts/harden_m2a.py
-      - name: Commit hardened source and tests
-        run: |
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add src/curriculum-compiler.ts tests/curriculum-compiler.test.ts
-          git diff --cached --check
-          git commit -m "fix: harden M2a history and provenance gates"
-          git push
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Verify
+        run: npm run verify
