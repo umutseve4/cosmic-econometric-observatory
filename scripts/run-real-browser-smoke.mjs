@@ -66,8 +66,11 @@ try {
   if (result.code !== 0 || result.signal !== null) {
     throw new Error(`Chrome failed: code=${String(result.code)} signal=${String(result.signal)}\n${stderr}`);
   }
-  if (stdout.includes(failMarker)) throw new Error(`browser page reported failure\n${stdout}`);
-  if (!stdout.includes(passMarker)) throw new Error(`browser page did not report ${passMarker}\n${stdout}\n${stderr}`);
+  const resultMatch = stdout.match(/<pre id="result">([\s\S]*?)<\/pre>/u);
+  if (resultMatch === null) throw new Error(`browser page did not serialize #result\n${stdout}\n${stderr}`);
+  const resultText = resultMatch[1]?.trim() ?? '';
+  if (resultText.startsWith(failMarker)) throw new Error(`browser page reported failure\n${resultText}`);
+  if (resultText !== passMarker) throw new Error(`browser page reported unexpected result: ${resultText}`);
   console.log(passMarker);
 } finally {
   clearTimeout(timeout);
