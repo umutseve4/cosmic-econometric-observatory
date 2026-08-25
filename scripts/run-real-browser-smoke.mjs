@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { createReadStream, statSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { extname, normalize, resolve, sep } from 'node:path';
-import { usesDetachedProcessGroup, waitForBrowserExit } from './browser-smoke-process.mjs';
+import { closeServerBounded, usesDetachedProcessGroup, waitForBrowserExit } from './browser-smoke-process.mjs';
 
 const root = resolve(process.cwd());
 const chrome = process.env.CHROME_BIN || 'google-chrome';
@@ -70,5 +70,5 @@ try {
   if (address === null || typeof address === 'string') throw new Error('ephemeral port unavailable');
   for (const testCase of cases) await runCase(testCase, address.port);
 } finally {
-  await new Promise((resolveClose) => server.close(resolveClose));
+  await closeServerBounded(server, shutdownGraceMs);
 }

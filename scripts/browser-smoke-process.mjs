@@ -1,6 +1,17 @@
+import { spawn } from 'node:child_process';
+
 export const usesDetachedProcessGroup = process.platform !== 'win32';
 
 export function killBrowserProcessTree(child) {
+  if (process.platform === 'win32' && Number.isInteger(child.pid)) {
+    const killer = spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], {
+      stdio: 'ignore',
+      windowsHide: true
+    });
+    killer.unref();
+    return;
+  }
+
   let groupError;
   if (usesDetachedProcessGroup && Number.isInteger(child.pid)) {
     try {
@@ -16,6 +27,13 @@ export function killBrowserProcessTree(child) {
     if (groupError === undefined) groupError = error;
   }
   if (groupError !== undefined && groupError?.code !== 'ESRCH') throw groupError;
+}
+
+function releaseChildHandles(child) {
+  child.stdin?.destroy();
+  child.stdout?.destroy();
+  child.stderr?.destroy();
+  child.unref?.();
 }
 
 export function waitForBrowserExit(child, page, options = {}) {
@@ -42,10 +60,14 @@ export function waitForBrowserExit(child, page, options = {}) {
       callback(value);
     };
     const timeoutError = () => new Error(`real-browser smoke timed out for ${page} after ${timeoutMs}ms; shutdown grace ${shutdownGraceMs}ms`);
+    const rejectTimeout = () => {
+      releaseChildHandles(child);
+      finish(reject, timeoutError());
+    };
     const onError = (error) => finish(reject, error);
     const onClose = (code, signal) => {
       if (timedOut) {
-        finish(reject, timeoutError());
+        rejectTimeout();
         return;
       }
       finish(resolve, { code, signal });
@@ -55,12 +77,30 @@ export function waitForBrowserExit(child, page, options = {}) {
     child.once('close', onClose);
     timeout = setTimeout(() => {
       timedOut = true;
+      shutdownDeadline = setTimeout(rejectTimeout, shutdownGraceMs);
       try {
         killTree(child);
       } catch {
-        // The bounded shutdown deadline below remains authoritative.
+        // The shutdown deadline releases parent-side handles even if termination fails.
       }
-      shutdownDeadline = setTimeout(() => finish(reject, timeoutError()), shutdownGraceMs);
     }, timeoutMs);
+  });
+}
+
+export function closeServerBounded(server, shutdownGraceMs = 2_000) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(deadline);
+      resolve();
+    };
+    const deadline = setTimeout(() => {
+      server.closeAllConnections?.();
+      finish();
+    }, shutdownGraceMs);
+    server.close(finish);
+    server.closeIdleConnections?.();
   });
 }
