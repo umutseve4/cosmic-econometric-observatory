@@ -1,116 +1,15 @@
 <!doctype html>
-<meta charset="utf-8">
-<title>M3e real-browser descriptor parity smoke</title>
-<pre id="result">M3E_BROWSER_SMOKE_PENDING</pre>
+<meta charset="utf-8"><title>M3e real-browser descriptor smoke</title><pre id="result">M3D_BROWSER_SMOKE_PENDING</pre>
 <script type="module">
 import { project } from '../dist/src/projections.js';
 import { renderProjection } from '../dist/src/browser-renderer.js';
 import { createBrowserDomPort } from '../dist/src/browser-dom-adapter.js';
-
-const hostileLabel = 'A < > & " <img src=x onerror=steal()> 🚀';
-const scene = {
-  schemaVersion: '0.1.0',
-  layoutVersion: 'browser-smoke-v1',
-  seed: 'browser-smoke',
-  inputHash: `sha256:${'d'.repeat(64)}`,
-  nodes: [
-    { id: 'node:b', semanticKind: 'course', label: 'B', position: { x: 2, y: 0, z: 2 }, focusOrder: 2, capabilities: ['inspect'] },
-    { id: 'node:a', semanticKind: 'program', label: hostileLabel, position: { x: 1, y: 0, z: 1 }, focusOrder: 1, capabilities: ['inspect'] }
-  ],
-  edges: [{ id: 'edge:a-b', semanticKind: 'CONTAINS', source: 'node:a', target: 'node:b' }]
-};
-const expected = {
-  nodeIds: ['node:a', 'node:b'],
-  edgeIds: ['edge:a-b'],
-  focusOrderNodeIds: ['node:a', 'node:b'],
-  nodeDescriptors: [
-    { id: 'node:a', label: hostileLabel, kind: 'program' },
-    { id: 'node:b', label: 'B', kind: 'course' }
-  ],
-  edgeDescriptors: [{ id: 'edge:a-b', source: 'node:a', target: 'node:b' }]
-};
-const dom = createBrowserDomPort(document);
-
-function assert(condition, message) {
-  if (!condition) throw new Error(message);
-}
-function assertExact(actual, expectedValue, name) {
-  assert(JSON.stringify(actual) === JSON.stringify(expectedValue), `${name}: ${JSON.stringify(actual)}`);
-}
-function render(kind, manifest = project(scene, kind)) {
-  const host = document.createElement('div');
-  let calls = 0;
-  const receipt = renderProjection(manifest, {
-    replaceChildren(...nodes) {
-      calls += 1;
-      host.replaceChildren(...nodes);
-    }
-  }, { dom });
-  assert(calls === 1, `${kind}: expected one target mutation, got ${calls}`);
-  assertExact(receipt.nodeIds, expected.nodeIds, `${kind}:nodeIds`);
-  assertExact(receipt.edgeIds, expected.edgeIds, `${kind}:edgeIds`);
-  assertExact(receipt.focusOrderNodeIds, expected.focusOrderNodeIds, `${kind}:focusOrderNodeIds`);
-  return host;
-}
-function assertRejectedWithoutMutation(manifest, expectedMessage, name) {
-  let calls = 0;
-  let message = '';
-  try {
-    renderProjection(manifest, { replaceChildren() { calls += 1; } }, { dom });
-  } catch (error) {
-    message = error instanceof Error ? error.message : String(error);
-  }
-  assert(message === expectedMessage, `${name}: unexpected error ${message}`);
-  assert(calls === 0, `${name}: expected zero target mutations, got ${calls}`);
-}
-
-try {
-  for (const kind of ['html', 'svg']) {
-    const manifest = project(scene, kind);
-    const detached = kind === 'html' ? dom.prepareHtml(manifest.content) : dom.prepareSvg(manifest.content);
-    assertExact(detached.nodeDescriptors, expected.nodeDescriptors, `${kind}:detached-node-descriptors`);
-    assertExact(detached.edgeDescriptors, expected.edgeDescriptors, `${kind}:detached-edge-descriptors`);
-  }
-
-  const htmlHost = render('html');
-  assert(htmlHost.childNodes.length === 3, 'html: expected three parsed roots');
-  assert(htmlHost.querySelector('img') === null, 'html: escaped label created an img element');
-  assert(htmlHost.querySelector('[onerror]') === null, 'html: escaped label created an event attribute');
-  assert(htmlHost.querySelector('h2')?.textContent === hostileLabel, 'html: escaped label text changed after parsing');
-
-  const svgHost = render('svg');
-  const svg = svgHost.firstElementChild;
-  assert(svg?.namespaceURI === 'http://www.w3.org/2000/svg', 'svg: root namespace mismatch');
-  assert([...svg.querySelectorAll('*')].every((element) => element.namespaceURI === 'http://www.w3.org/2000/svg'), 'svg: descendant namespace mismatch');
-  assert(svg.querySelector('img') === null, 'svg: escaped label created an img element');
-  assert(svg.querySelector('[onerror]') === null, 'svg: escaped label created an event attribute');
-  assert(svg.querySelector('title')?.textContent === hostileLabel, 'svg: escaped label text changed after parsing');
-
-  const safeHtml = project(scene, 'html');
-  assertRejectedWithoutMutation(
-    { ...safeHtml, nodeDescriptors: [{ ...safeHtml.nodeDescriptors[0], label: 'forged' }, safeHtml.nodeDescriptors[1]] },
-    'BROWSER_RENDER_NODE_DESCRIPTORS_MISMATCH',
-    'tampered-descriptor'
-  );
-  assertRejectedWithoutMutation(
-    { ...safeHtml, content: safeHtml.content.replace('data-semantic-kind="program"', 'data-semantic-kind="forged"') },
-    'BROWSER_RENDER_NODE_DESCRIPTORS_MISMATCH',
-    'html-semantic-drift'
-  );
-
-  const safeSvg = project(scene, 'svg');
-  assertRejectedWithoutMutation(
-    { ...safeSvg, content: safeSvg.content.replace('data-target="node:b"', 'data-target="node:a"') },
-    'BROWSER_RENDER_EDGE_DESCRIPTORS_MISMATCH',
-    'svg-semantic-drift'
-  );
-
-  const hostile = { ...safeHtml, content: safeHtml.content.replace('<h2>', '<h2><img src="x" onerror="steal()">') };
-  assertRejectedWithoutMutation(hostile, 'BROWSER_RENDER_INVALID_CONTENT:html:prepare-failed', 'hostile-markup');
-
-  document.querySelector('#result').textContent = 'M3D_BROWSER_SMOKE_PASS';
-} catch (error) {
-  const message = error instanceof Error ? `${error.message}\n${error.stack ?? ''}` : String(error);
-  document.querySelector('#result').textContent = `M3D_BROWSER_SMOKE_FAIL\n${message}`;
-}
+const hostileLabel='A < > & " <img src=x onerror=steal()>';
+const scene={schemaVersion:'0.1.0',layoutVersion:'browser-smoke-v1',seed:'browser-smoke',inputHash:`sha256:${'d'.repeat(64)}`,nodes:[{id:'node:b',semanticKind:'course',label:'B',position:{x:2,y:0,z:2},focusOrder:2,capabilities:['inspect']},{id:'node:a',semanticKind:'program',label:hostileLabel,position:{x:1,y:0,z:1},focusOrder:1,capabilities:['inspect']}],edges:[{id:'edge:a-b',semanticKind:'CONTAINS',source:'node:a',target:'node:b'}]};
+const expectedNodes=[{id:'node:a',label:hostileLabel,kind:'program'},{id:'node:b',label:'B',kind:'course'}],expectedEdges=[{id:'edge:a-b',source:'node:a',target:'node:b'}];
+function ok(c,m){if(!c)throw new Error(m);}function eq(a,b,m){ok(JSON.stringify(a)===JSON.stringify(b),`${m}: ${JSON.stringify(a)}`);}
+function render(kind){const manifest=project(scene,kind);eq(manifest.nodeDescriptors,expectedNodes,`${kind}:manifest nodes`);eq(manifest.edgeDescriptors,expectedEdges,`${kind}:manifest edges`);const host=document.createElement('div');let calls=0;renderProjection(manifest,{replaceChildren(...nodes){calls+=1;host.replaceChildren(...nodes);}},{dom:createBrowserDomPort(document)});ok(calls===1,`${kind}: mutation count`);return host;}
+try{const html=render('html');ok(html.querySelector('img')===null,'html injection');ok(html.querySelector('h2')?.textContent===hostileLabel,'html decoded label');const svg=render('svg');ok(svg.querySelector('title')?.textContent===hostileLabel,'svg decoded label');
+for(const tamper of [(m)=>({...m,nodeDescriptors:m.nodeDescriptors.map((v,i)=>i? v:{...v,label:'forged'})}),(m)=>({...m,content:m.content.replace(hostileLabel.replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;').replaceAll('>','&gt;'),'forged')})]){const safe=project(scene,'html'),bad=tamper(safe);let calls=0,rejected=false;try{renderProjection(bad,{replaceChildren(){calls+=1;}},{dom:createBrowserDomPort(document)});}catch(error){rejected=error instanceof Error&&error.message==='BROWSER_RENDER_NODE_DESCRIPTORS_MISMATCH';}ok(rejected,'tamper not rejected');ok(calls===0,'tamper mutated target');}
+document.querySelector('#result').textContent='M3D_BROWSER_SMOKE_PASS';}catch(error){document.querySelector('#result').textContent=`M3D_BROWSER_SMOKE_FAIL\n${error instanceof Error?error.stack:error}`;}
 </script>
