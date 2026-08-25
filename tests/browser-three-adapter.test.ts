@@ -12,14 +12,22 @@ const scene: SceneIR = {
   edges: [{ id: 'edge:a-b', semanticKind: 'CONTAINS', source: 'node:a', target: 'node:b' }]
 };
 
-function fixtureRuntime(options: { throwOnRender?: boolean } = {}) {
+type FixtureOptions = { throwOnRender?: boolean; throwOnMaterial?: boolean; throwOnSetPoints?: boolean };
+
+function fixtureRuntime(options: FixtureOptions = {}) {
   const counters = { renders: 0, rendererDisposals: 0, resourceDisposals: 0 };
   class Position { set(_x: number, _y: number, _z: number): void {} }
   class Object3D { name = ''; userData: Record<string, unknown> = {}; readonly position = new Position(); }
   class Scene { add(..._objects: Object3D[]): void {} }
   class Camera extends Object3D { lookAt(_x: number, _y: number, _z: number): void {} }
   class Resource { dispose(): void { counters.resourceDisposals += 1; } }
-  class BufferGeometry extends Resource { setFromPoints(_points: readonly unknown[]): BufferGeometry { return this; } }
+  class Material extends Resource { constructor() { super(); if (options.throwOnMaterial) throw new Error('material-failed'); } }
+  class BufferGeometry extends Resource {
+    setFromPoints(_points: readonly unknown[]): BufferGeometry {
+      if (options.throwOnSetPoints) throw new Error('points-failed');
+      return this;
+    }
+  }
   class Renderer {
     constructor(_options: unknown) {}
     setPixelRatio(_value: number): void {}
@@ -29,7 +37,7 @@ function fixtureRuntime(options: { throwOnRender?: boolean } = {}) {
   }
   const runtime = {
     Scene, PerspectiveCamera: Camera, WebGLRenderer: Renderer, SphereGeometry: Resource,
-    MeshBasicMaterial: Resource, Mesh: Object3D, BufferGeometry, Vector3: class {},
+    MeshBasicMaterial: Material, Mesh: Object3D, BufferGeometry, Vector3: class {},
     LineBasicMaterial: Resource, Line: Object3D
   } as unknown as BrowserThreeRuntime;
   return { runtime, counters };
@@ -38,6 +46,20 @@ function fakeDocument() {
   return { createElement() { return { dataset: {}, setAttribute() {} } as unknown as HTMLCanvasElement; } };
 }
 const unusedDom = { prepareHtml() { throw new Error('unused'); }, prepareSvg() { throw new Error('unused'); } };
+
+function assertPreparationFailure(fixture: ReturnType<typeof fixtureRuntime>): number {
+  const manifest = project(scene, 'three');
+  let commits = 0;
+  assert.throws(() => renderProjection(manifest, { replaceChildren() { commits += 1; } }, {
+    dom: unusedDom, three: createBrowserThreePort(fakeDocument(), fixture.runtime)
+  }), (error: unknown) => {
+    assert.equal((error as Error).message, 'BROWSER_RENDER_INVALID_CONTENT:three:prepare-failed');
+    assert.equal(((error as Error).cause as Error).message, 'BROWSER_THREE_PREPARE_FAILED');
+    return true;
+  });
+  assert.equal(commits, 0);
+  return commits;
+}
 
 test('prepares one deterministic rendered canvas and disposes transient GPU resources', () => {
   const manifest = project(scene, 'three');
@@ -58,18 +80,25 @@ test('prepares one deterministic rendered canvas and disposes transient GPU reso
 });
 
 test('render failure disposes resources and never reaches the mount target', () => {
-  const manifest = project(scene, 'three');
   const fixture = fixtureRuntime({ throwOnRender: true });
-  let commits = 0;
-  assert.throws(() => renderProjection(manifest, { replaceChildren() { commits += 1; } }, {
-    dom: unusedDom, three: createBrowserThreePort(fakeDocument(), fixture.runtime)
-  }), (error: unknown) => {
-    assert.equal((error as Error).message, 'BROWSER_RENDER_INVALID_CONTENT:three:prepare-failed');
-    assert.equal(((error as Error).cause as Error).message, 'BROWSER_THREE_PREPARE_FAILED');
-    return true;
-  });
-  assert.equal(commits, 0);
+  assertPreparationFailure(fixture);
   assert.equal(fixture.counters.renders, 1);
   assert.equal(fixture.counters.rendererDisposals, 1);
   assert.equal(fixture.counters.resourceDisposals, 6);
+});
+
+test('material construction failure disposes the already-created geometry', () => {
+  const fixture = fixtureRuntime({ throwOnMaterial: true });
+  assertPreparationFailure(fixture);
+  assert.equal(fixture.counters.renders, 0);
+  assert.equal(fixture.counters.rendererDisposals, 0);
+  assert.equal(fixture.counters.resourceDisposals, 1);
+});
+
+test('edge point construction failure disposes earlier resources and the edge geometry', () => {
+  const fixture = fixtureRuntime({ throwOnSetPoints: true });
+  assertPreparationFailure(fixture);
+  assert.equal(fixture.counters.renders, 0);
+  assert.equal(fixture.counters.rendererDisposals, 0);
+  assert.equal(fixture.counters.resourceDisposals, 5);
 });
