@@ -149,14 +149,15 @@ for (const escapeCase of escapeCases) {
     };
 
     const html = project(hostileScene, 'html').content;
-    assert.match(html, new RegExp(`<a href="#${encodedNodeAId}" data-node-id="${encodedNodeAId}">${encodedNodeLabel}</a>`));
-    assert.match(html, new RegExp(`<article id="${encodedNodeAId}" tabindex="-1" data-node-id="${encodedNodeAId}" data-semantic-kind="${encodedNodeKind}"><h2>${encodedNodeLabel}</h2><p>${encodedNodeKind}</p></article>`));
-    assert.match(html, new RegExp(`<li data-edge-id="${encodedEdgeId}" data-semantic-kind="${encodedEdgeKind}"><a href="#${encodedNodeAId}">${encodedNodeAId}</a> → <a href="#${encodedNodeBId}">${encodedNodeBId}</a></li>`));
+    assert.ok(html.includes(`<a href="#${encodedNodeAId}" data-node-id="${encodedNodeAId}">${encodedNodeLabel}</a>`));
+    assert.ok(html.includes(`<article id="${encodedNodeAId}" tabindex="-1" data-node-id="${encodedNodeAId}" data-semantic-kind="${encodedNodeKind}"><h2>${encodedNodeLabel}</h2><p>${encodedNodeKind}</p></article>`));
+    assert.ok(html.includes(`<li data-edge-id="${encodedEdgeId}" data-semantic-kind="${encodedEdgeKind}"><a href="#${encodedNodeAId}">${encodedNodeAId}</a> → <a href="#${encodedNodeBId}">${encodedNodeBId}</a></li>`));
     assertStructurallyNested(html);
 
     const svg = project(hostileScene, 'svg').content;
-    assert.match(svg, new RegExp(`<g id="${encodedNodeAId}" role="listitem" tabindex="0" data-node-id="${encodedNodeAId}" data-semantic-kind="${encodedNodeKind}" aria-label="1 of 2: ${encodedNodeLabel} \\(${encodedNodeKind}\\)"><circle[^>]+/><title>${encodedNodeLabel}</title></g>`));
-    assert.match(svg, new RegExp(`<path data-edge-id="${encodedEdgeId}" data-semantic-kind="${encodedEdgeKind}" data-source="${encodedNodeAId}" data-target="${encodedNodeBId}"/>`));
+    assert.ok(svg.includes(`<g id="${encodedNodeAId}" role="listitem" tabindex="0" data-node-id="${encodedNodeAId}" data-semantic-kind="${encodedNodeKind}" aria-label="1 of 2: ${encodedNodeLabel} (${encodedNodeKind})"><circle`));
+    assert.ok(svg.includes(`<title>${encodedNodeLabel}</title></g>`));
+    assert.ok(svg.includes(`<path data-edge-id="${encodedEdgeId}" data-semantic-kind="${encodedEdgeKind}" data-source="${encodedNodeAId}" data-target="${encodedNodeBId}"/>`));
 
     for (const markup of [html, svg]) {
       assert.doesNotMatch(markup, /<script>/);
