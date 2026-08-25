@@ -173,13 +173,19 @@ test('rejects hostile prepared-port output with stable errors', () => {
   }
 });
 
+type ThreeFixturePayload = {
+  nodes: { focusOrder: number }[];
+  edges: { source: string }[];
+};
+
 test('rejects invalid Three focus orders and edge endpoints before any port or target call', () => {
-  for (const mutate of [
-    (payload: { nodes: { focusOrder: number }[] }) => { payload.nodes[0]!.focusOrder = 0; },
-    (payload: { edges: { source: string }[] }) => { payload.edges[0]!.source = 'node:missing'; }
-  ]) {
+  const mutations: readonly ((payload: ThreeFixturePayload) => void)[] = [
+    (payload) => { payload.nodes[0]!.focusOrder = 0; },
+    (payload) => { payload.edges[0]!.source = 'node:missing'; }
+  ];
+  for (const mutate of mutations) {
     const original = project(scene, 'three');
-    const payload = JSON.parse(original.content) as { nodes: { focusOrder: number }[]; edges: { source: string }[] };
+    const payload = JSON.parse(original.content) as ThreeFixturePayload;
     mutate(payload);
     let portCalls = 0;
     const mount = target();
