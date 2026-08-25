@@ -1,15 +1,97 @@
 <!doctype html>
-<meta charset="utf-8"><title>M3e real-browser descriptor smoke</title><pre id="result">M3D_BROWSER_SMOKE_PENDING</pre>
+<html lang="en">
+<head><meta charset="utf-8"><title>Browser DOM smoke</title></head>
+<body>
+<pre id="result">RUNNING</pre>
 <script type="module">
-import { project } from '../dist/src/projections.js';
-import { renderProjection } from '../dist/src/browser-renderer.js';
-import { createBrowserDomPort } from '../dist/src/browser-dom-adapter.js';
-const hostileLabel='A < > & " <img src=x onerror=steal()>';
-const scene={schemaVersion:'0.1.0',layoutVersion:'browser-smoke-v1',seed:'browser-smoke',inputHash:`sha256:${'d'.repeat(64)}`,nodes:[{id:'node:b',semanticKind:'course',label:'B',position:{x:2,y:0,z:2},focusOrder:2,capabilities:['inspect']},{id:'node:a',semanticKind:'program',label:hostileLabel,position:{x:1,y:0,z:1},focusOrder:1,capabilities:['inspect']}],edges:[{id:'edge:a-b',semanticKind:'CONTAINS',source:'node:a',target:'node:b'}]};
-const expectedNodes=[{id:'node:a',label:hostileLabel,kind:'program'},{id:'node:b',label:'B',kind:'course'}],expectedEdges=[{id:'edge:a-b',source:'node:a',target:'node:b'}];
-function ok(c,m){if(!c)throw new Error(m);}function eq(a,b,m){ok(JSON.stringify(a)===JSON.stringify(b),`${m}: ${JSON.stringify(a)}`);}
-function render(kind){const manifest=project(scene,kind);eq(manifest.nodeDescriptors,expectedNodes,`${kind}:manifest nodes`);eq(manifest.edgeDescriptors,expectedEdges,`${kind}:manifest edges`);const host=document.createElement('div');let calls=0;renderProjection(manifest,{replaceChildren(...nodes){calls+=1;host.replaceChildren(...nodes);}},{dom:createBrowserDomPort(document)});ok(calls===1,`${kind}: mutation count`);return host;}
-try{const html=render('html');ok(html.querySelector('img')===null,'html injection');ok(html.querySelector('h2')?.textContent===hostileLabel,'html decoded label');const svg=render('svg');ok(svg.querySelector('title')?.textContent===hostileLabel,'svg decoded label');
-for(const tamper of [(m)=>({...m,nodeDescriptors:m.nodeDescriptors.map((v,i)=>i? v:{...v,label:'forged'})}),(m)=>({...m,content:m.content.replaceAll(hostileLabel.replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;').replaceAll('>','&gt;'),'forged')})]){const safe=project(scene,'html'),bad=tamper(safe);let calls=0,rejected=false;try{renderProjection(bad,{replaceChildren(){calls+=1;}},{dom:createBrowserDomPort(document)});}catch(error){rejected=error instanceof Error&&error.message==='BROWSER_RENDER_NODE_DESCRIPTORS_MISMATCH';}ok(rejected,'tamper not rejected');ok(calls===0,'tamper mutated target');}
-document.querySelector('#result').textContent='M3D_BROWSER_SMOKE_PASS';}catch(error){document.querySelector('#result').textContent=`M3D_BROWSER_SMOKE_FAIL\n${error instanceof Error?error.stack:error}`;}
+import { createBrowserDomPreparationPort, project, renderProjection } from '../dist/src/index.js';
+
+const result = document.querySelector('#result');
+const hostileLabel = '<img src=x onerror="globalThis.__M3D_XSS__=1"> & <script>globalThis.__M3D_SCRIPT__=1<\/script>';
+const scene = {
+  schemaVersion: '0.1.0', layoutVersion: 'real-browser-smoke-v1', seed: 'real-browser-smoke',
+  inputHash: `sha256:${'d'.repeat(64)}`,
+  nodes: [
+    { id: 'node:b', semanticKind: 'course', label: hostileLabel, position: { x: 2, y: 0, z: 2 }, focusOrder: 2, capabilities: ['inspect'] },
+    { id: 'node:a', semanticKind: 'program', label: 'A & B', position: { x: 1, y: 0, z: 1 }, focusOrder: 1, capabilities: ['inspect'] }
+  ],
+  edges: [{ id: 'edge:a-b', semanticKind: 'CONTAINS', source: 'node:a', target: 'node:b' }]
+};
+const assert = (condition, message) => { if (!condition) throw new Error(message); };
+const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
+
+try {
+  const htmlManifest = project(scene, 'html');
+  const svgManifest = project(scene, 'svg');
+  const port = createBrowserDomPreparationPort(document);
+  const htmlTarget = document.createElement('div');
+  let htmlMounts = 0;
+  const htmlReceipt = renderProjection(htmlManifest, { replaceChildren(...nodes) { htmlMounts += 1; htmlTarget.replaceChildren(...nodes); } }, { dom: port });
+  assert(htmlMounts === 1, 'html mount count');
+  assert(same(htmlReceipt.nodeIds, ['node:a', 'node:b']), 'html receipt nodes');
+  assert(same(htmlReceipt.edgeIds, ['edge:a-b']), 'html receipt edges');
+  assert(same(htmlReceipt.focusOrderNodeIds, ['node:a', 'node:b']), 'html receipt focus');
+  assert(htmlTarget.children.length === 3, 'html parsed roots');
+  assert(!htmlTarget.querySelector('img'), 'html hostile image became active');
+  assert(!htmlTarget.querySelector('[onerror]'), 'html event attribute survived');
+  assert(htmlTarget.textContent.includes(hostileLabel), 'html label did not decode exactly');
+  assert(globalThis.__M3D_XSS__ === undefined && globalThis.__M3D_SCRIPT__ === undefined, 'html hostile content executed');
+  const htmlPrepared = port.prepareHtml(htmlManifest.content);
+  assert(same(htmlPrepared.nodeDescriptors, htmlManifest.nodeDescriptors), 'html node descriptor parity');
+  assert(same(htmlPrepared.edgeDescriptors, htmlManifest.edgeDescriptors), 'html edge descriptor parity');
+
+  const svgTarget = document.createElement('div');
+  let svgMounts = 0;
+  const svgReceipt = renderProjection(svgManifest, { replaceChildren(...nodes) { svgMounts += 1; svgTarget.replaceChildren(...nodes); } }, { dom: port });
+  assert(svgMounts === 1, 'svg mount count');
+  assert(same(svgReceipt.nodeIds, ['node:a', 'node:b']), 'svg receipt nodes');
+  assert(same(svgReceipt.edgeIds, ['edge:a-b']), 'svg receipt edges');
+  assert(same(svgReceipt.focusOrderNodeIds, ['node:a', 'node:b']), 'svg receipt focus');
+  const svgRoot = svgTarget.firstElementChild;
+  assert(svgRoot?.localName === 'svg', 'svg root');
+  assert(svgRoot?.namespaceURI === 'http://www.w3.org/2000/svg', 'svg namespace');
+  for (const element of svgRoot.querySelectorAll('*')) assert(element.namespaceURI === 'http://www.w3.org/2000/svg', `svg descendant namespace:${element.localName}`);
+  assert(!svgTarget.querySelector('img'), 'svg hostile image became active');
+  assert(!svgTarget.querySelector('[onerror]'), 'svg event attribute survived');
+  assert(svgTarget.textContent.includes(hostileLabel), 'svg label did not decode exactly');
+  assert(globalThis.__M3D_XSS__ === undefined && globalThis.__M3D_SCRIPT__ === undefined, 'svg hostile content executed');
+  const svgPrepared = port.prepareSvg(svgManifest.content);
+  assert(same(svgPrepared.nodeDescriptors, svgManifest.nodeDescriptors), 'svg node descriptor parity');
+  assert(same(svgPrepared.edgeDescriptors, svgManifest.edgeDescriptors), 'svg edge descriptor parity');
+
+  const encodedHostileLabel = hostileLabel.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
+  const nestedActiveContent = htmlManifest.content.replace(encodedHostileLabel, '<span><img src="x" onerror="globalThis.__M3D_NESTED__=1"></span>');
+  let hostileMounts = 0;
+  let rejected = false;
+  try {
+    renderProjection({ ...htmlManifest, content: nestedActiveContent }, { replaceChildren() { hostileMounts += 1; } }, { dom: port });
+  } catch (error) { rejected = error instanceof Error && error.message === 'BROWSER_DOM_INVALID_CONTENT:html:element:SPAN'; }
+  assert(rejected, 'nested active content was not rejected');
+  assert(hostileMounts === 0, 'nested active content reached target');
+  assert(globalThis.__M3D_NESTED__ === undefined, 'nested active content executed');
+
+  const forgedManifest = { ...htmlManifest, nodeDescriptors: htmlManifest.nodeDescriptors.map((descriptor) => descriptor.id === 'node:b' ? { ...descriptor, label: 'forged' } : descriptor) };
+  let forgedManifestMounts = 0;
+  let forgedManifestRejected = false;
+  try {
+    renderProjection(forgedManifest, { replaceChildren() { forgedManifestMounts += 1; } }, { dom: port });
+  } catch (error) { forgedManifestRejected = error instanceof Error && error.message === 'BROWSER_RENDER_NODE_DESCRIPTORS_MISMATCH'; }
+  assert(forgedManifestRejected, 'forged manifest descriptor was not rejected');
+  assert(forgedManifestMounts === 0, 'forged manifest descriptor reached target');
+
+  const forgedContent = htmlManifest.content.replaceAll(encodedHostileLabel, 'forged');
+  let forgedContentMounts = 0;
+  let forgedContentRejected = false;
+  try {
+    renderProjection({ ...htmlManifest, content: forgedContent }, { replaceChildren() { forgedContentMounts += 1; } }, { dom: port });
+  } catch (error) { forgedContentRejected = error instanceof Error && error.message === 'BROWSER_RENDER_NODE_DESCRIPTORS_MISMATCH'; }
+  assert(forgedContentRejected, 'content descriptor drift was not rejected');
+  assert(forgedContentMounts === 0, 'content descriptor drift reached target');
+
+  result.textContent = 'M3D_BROWSER_SMOKE_PASS';
+} catch (error) {
+  result.textContent = `M3D_BROWSER_SMOKE_FAIL:${error instanceof Error ? error.message : String(error)}`;
+}
 </script>
+</body>
+</html>
