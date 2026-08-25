@@ -1,0 +1,82 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>M3d real-browser DOM smoke</title>
+<pre id="result">M3D_BROWSER_SMOKE_PENDING</pre>
+<script type="module">
+import { project } from '../dist/src/projections.js';
+import { renderProjection } from '../dist/src/browser-renderer.js';
+import { createBrowserDomPort } from '../dist/src/browser-dom-adapter.js';
+
+const expected = {
+  nodeIds: ['node:a', 'node:b'],
+  edgeIds: ['edge:a-b'],
+  focusOrderNodeIds: ['node:a', 'node:b']
+};
+const hostileLabel = 'A < > & " <img src=x onerror=steal()>';
+const scene = {
+  schemaVersion: '0.1.0',
+  layoutVersion: 'browser-smoke-v1',
+  seed: 'browser-smoke',
+  inputHash: `sha256:${'d'.repeat(64)}`,
+  nodes: [
+    { id: 'node:b', semanticKind: 'course', label: 'B', position: { x: 2, y: 0, z: 2 }, focusOrder: 2, capabilities: ['inspect'] },
+    { id: 'node:a', semanticKind: 'program', label: hostileLabel, position: { x: 1, y: 0, z: 1 }, focusOrder: 1, capabilities: ['inspect'] }
+  ],
+  edges: [{ id: 'edge:a-b', semanticKind: 'CONTAINS', source: 'node:a', target: 'node:b' }]
+};
+
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+function assertArray(actual, expectedValues, name) {
+  assert(JSON.stringify(actual) === JSON.stringify(expectedValues), `${name}: ${JSON.stringify(actual)}`);
+}
+function render(kind, manifest = project(scene, kind)) {
+  const host = document.createElement('div');
+  let calls = 0;
+  const receipt = renderProjection(manifest, {
+    replaceChildren(...nodes) {
+      calls += 1;
+      host.replaceChildren(...nodes);
+    }
+  }, { dom: createBrowserDomPort(document) });
+  assert(calls === 1, `${kind}: expected one target mutation, got ${calls}`);
+  assertArray(receipt.nodeIds, expected.nodeIds, `${kind}:nodeIds`);
+  assertArray(receipt.edgeIds, expected.edgeIds, `${kind}:edgeIds`);
+  assertArray(receipt.focusOrderNodeIds, expected.focusOrderNodeIds, `${kind}:focusOrderNodeIds`);
+  return host;
+}
+
+try {
+  const htmlHost = render('html');
+  assert(htmlHost.childNodes.length === 3, 'html: expected three parsed roots');
+  assert(htmlHost.querySelector('img') === null, 'html: escaped label created an img element');
+  assert(htmlHost.querySelector('[onerror]') === null, 'html: escaped label created an event attribute');
+  assert(htmlHost.querySelector('h2')?.textContent === hostileLabel, 'html: escaped label text changed after parsing');
+
+  const svgHost = render('svg');
+  const svg = svgHost.firstElementChild;
+  assert(svg?.namespaceURI === 'http://www.w3.org/2000/svg', 'svg: root namespace mismatch');
+  assert([...svg.querySelectorAll('*')].every((element) => element.namespaceURI === 'http://www.w3.org/2000/svg'), 'svg: descendant namespace mismatch');
+  assert(svg.querySelector('img') === null, 'svg: escaped label created an img element');
+  assert(svg.querySelector('[onerror]') === null, 'svg: escaped label created an event attribute');
+  assert(svg.querySelector('title')?.textContent === hostileLabel, 'svg: escaped label text changed after parsing');
+
+  const safe = project(scene, 'html');
+  const tampered = { ...safe, content: safe.content.replace('<h2>', '<h2><img src="x" onerror="steal()">') };
+  let hostileCalls = 0;
+  let rejected = false;
+  try {
+    renderProjection(tampered, { replaceChildren() { hostileCalls += 1; } }, { dom: createBrowserDomPort(document) });
+  } catch (error) {
+    rejected = error instanceof Error && error.message === 'BROWSER_RENDER_INVALID_CONTENT:html:prepare-failed';
+  }
+  assert(rejected, 'hostile: expected redacted preparation failure');
+  assert(hostileCalls === 0, `hostile: expected zero target mutations, got ${hostileCalls}`);
+
+  document.querySelector('#result').textContent = 'M3D_BROWSER_SMOKE_PASS';
+} catch (error) {
+  const message = error instanceof Error ? `${error.message}\n${error.stack ?? ''}` : String(error);
+  document.querySelector('#result').textContent = `M3D_BROWSER_SMOKE_FAIL\n${message}`;
+}
+</script>
