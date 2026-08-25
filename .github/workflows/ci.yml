@@ -9,32 +9,9 @@ permissions:
   contents: read
 
 jobs:
-  curriculum-test:
-    name: curriculum (${{ matrix.name }})
+  verify:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: exact-graph
-            pattern: exact source-backed
-          - name: determinism
-            pattern: same input
-          - name: insertion-stability
-            pattern: synthetic insertion
-          - name: routes
-            pattern: canonical routes
-          - name: non-mutation
-            pattern: does not mutate
-          - name: invalid-inputs
-            pattern: duplicate, dangling
-          - name: anomaly-boundary
-            pattern: dangling anomaly
-          - name: history-tampering
-            pattern: missing or tampered
-          - name: removal
-            pattern: insertion-only history
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -42,6 +19,4 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: npm run build
-      - name: Run ${{ matrix.name }} test
-        run: node --test --test-name-pattern "${{ matrix.pattern }}" dist/tests/curriculum-compiler.test.js
+      - run: npm run verify
