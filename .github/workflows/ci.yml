@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  verify:
+  typecheck:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -19,5 +19,18 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --ignore-scripts
-      - name: Verify
-        run: npm run verify
+      - name: Typecheck
+        run: npm run typecheck
+
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Build and test
+        run: npm test
