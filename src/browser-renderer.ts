@@ -2,10 +2,12 @@ import { compareCodePoints } from './canonical.js';
 import type { ProjectionKind, ProjectionManifestV2 } from './projections.js';
 
 export interface BrowserMountTarget<Node> {
+  /** One final commit attempt. Mutation behavior if this method throws belongs to the target implementation. */
   replaceChildren(...nodes: Node[]): void;
 }
 
 export interface PreparedBrowserProjection<Node> {
+  /** Roots are trusted output from the injected preparation port. */
   readonly roots: readonly Node[];
   readonly nodeIds: readonly string[];
   readonly edgeIds: readonly string[];
@@ -41,7 +43,7 @@ export function renderProjection<Node>(
 ): BrowserRenderReceipt {
   validateManifest(manifest);
 
-  let prepared: PreparedBrowserProjection<Node>;
+  let prepared: unknown;
   if (manifest.projection === 'three') {
     if (ports.three === undefined) throw new Error('BROWSER_RENDER_THREE_PORT_REQUIRED');
     const payload = parseAndValidateThreePayload(manifest);
@@ -54,7 +56,7 @@ export function renderProjection<Node>(
     throw new Error(`BROWSER_RENDER_UNSUPPORTED_PROJECTION:${String(manifest.projection)}`);
   }
 
-  validatePrepared(prepared, manifest);
+  validatePrepared<Node>(prepared, manifest);
   target.replaceChildren(...prepared.roots);
 
   return Object.freeze({
@@ -101,18 +103,21 @@ function validateStringArray(name: string, values: readonly string[]): void {
   }
 }
 
-function prepare<Node>(kind: ProjectionKind, operation: () => PreparedBrowserProjection<Node>): PreparedBrowserProjection<Node> {
+function prepare(kind: ProjectionKind, operation: () => unknown): unknown {
   try {
     return operation();
   } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
-    throw new Error(`BROWSER_RENDER_INVALID_CONTENT:${kind}:${reason}`);
+    throw new Error(`BROWSER_RENDER_INVALID_CONTENT:${kind}:prepare-failed`, { cause: error });
   }
 }
 
-function validatePrepared<Node>(prepared: PreparedBrowserProjection<Node>, manifest: ProjectionManifestV2): void {
+function validatePrepared<Node>(prepared: unknown, manifest: ProjectionManifestV2): asserts prepared is PreparedBrowserProjection<Node> {
+  if (!isRecord(prepared)) throw new Error(`BROWSER_RENDER_INVALID_CONTENT:${manifest.projection}:prepared-shape`);
   if (!Array.isArray(prepared.roots) || prepared.roots.length === 0) {
     throw new Error(`BROWSER_RENDER_INVALID_CONTENT:${manifest.projection}:roots`);
+  }
+  if (!isStringArray(prepared.nodeIds) || !isStringArray(prepared.edgeIds) || !isStringArray(prepared.focusOrderNodeIds)) {
+    throw new Error(`BROWSER_RENDER_INVALID_CONTENT:${manifest.projection}:metadata`);
   }
   if (!sameStrings(prepared.nodeIds, manifest.nodeIds)) throw new Error('BROWSER_RENDER_NODE_IDS_MISMATCH');
   if (!sameStrings(prepared.edgeIds, manifest.edgeIds)) throw new Error('BROWSER_RENDER_EDGE_IDS_MISMATCH');
@@ -133,17 +138,35 @@ function parseAndValidateThreePayload(manifest: ProjectionManifestV2): unknown {
   }
   const nodes = payload.nodes;
   const edges = payload.edges;
-  if (nodes.some((node) => !isRecord(node) || typeof node.id !== 'string' || typeof node.focusOrder !== 'number')) {
+  if (nodes.some((node) => !isRecord(node)
+    || typeof node.id !== 'string'
+    || typeof node.focusOrder !== 'number'
+    || !Number.isSafeInteger(node.focusOrder)
+    || node.focusOrder < 1)) {
     throw new Error('BROWSER_RENDER_INVALID_CONTENT:three:nodes');
   }
-  if (edges.some((edge) => !isRecord(edge) || typeof edge.id !== 'string')) {
+  const nodeIdsUnsorted = nodes.map((node) => (node as Record<string, unknown>).id as string);
+  const focusOrders = nodes.map((node) => (node as Record<string, unknown>).focusOrder as number);
+  if (new Set(nodeIdsUnsorted).size !== nodeIdsUnsorted.length || new Set(focusOrders).size !== focusOrders.length) {
+    throw new Error('BROWSER_RENDER_INVALID_CONTENT:three:nodes');
+  }
+  const nodeSet = new Set(nodeIdsUnsorted);
+  if (edges.some((edge) => !isRecord(edge)
+    || typeof edge.id !== 'string'
+    || typeof edge.source !== 'string'
+    || typeof edge.target !== 'string'
+    || !nodeSet.has(edge.source)
+    || !nodeSet.has(edge.target))) {
     throw new Error('BROWSER_RENDER_INVALID_CONTENT:three:edges');
   }
-  const nodeIds = nodes.map((node) => (node as Record<string, unknown>).id as string).sort(compareCodePoints);
-  const edgeIds = edges.map((edge) => (edge as Record<string, unknown>).id as string).sort(compareCodePoints);
+  const edgeIdsUnsorted = edges.map((edge) => (edge as Record<string, unknown>).id as string);
+  if (new Set(edgeIdsUnsorted).size !== edgeIdsUnsorted.length) {
+    throw new Error('BROWSER_RENDER_INVALID_CONTENT:three:edges');
+  }
+  const nodeIds = [...nodeIdsUnsorted].sort(compareCodePoints);
+  const edgeIds = [...edgeIdsUnsorted].sort(compareCodePoints);
   const focusOrderNodeIds = [...nodes]
-    .sort((left, right) => ((left as Record<string, unknown>).focusOrder as number) - ((right as Record<string, unknown>).focusOrder as number)
-      || compareCodePoints((left as Record<string, unknown>).id as string, (right as Record<string, unknown>).id as string))
+    .sort((left, right) => ((left as Record<string, unknown>).focusOrder as number) - ((right as Record<string, unknown>).focusOrder as number))
     .map((node) => (node as Record<string, unknown>).id as string);
   if (!sameStrings(nodeIds, manifest.nodeIds)) throw new Error('BROWSER_RENDER_NODE_IDS_MISMATCH');
   if (!sameStrings(edgeIds, manifest.edgeIds)) throw new Error('BROWSER_RENDER_EDGE_IDS_MISMATCH');
@@ -153,6 +176,10 @@ function parseAndValidateThreePayload(manifest: ProjectionManifestV2): unknown {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+function isStringArray(value: unknown): value is readonly string[] {
+  return Array.isArray(value) && value.every((entry) => typeof entry === 'string');
 }
 
 function sameStrings(left: readonly string[], right: readonly string[]): boolean {

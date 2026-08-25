@@ -51,7 +51,7 @@ function target() {
 }
 
 for (const kind of ['html', 'svg', 'three'] as const) {
-  test(`atomically prepares and mounts ${kind} with an immutable deterministic receipt`, () => {
+  test(`prepares ${kind} off-target and performs one commit attempt with an immutable receipt`, () => {
     const mount = target();
     const manifest = project(scene, kind);
     const first = renderProjection(manifest, mount, ports());
@@ -138,19 +138,68 @@ for (const [name, change, message] of preparedMismatchCases) {
   });
 }
 
-test('wraps preparation failures deterministically and leaves target unchanged', () => {
+test('redacts preparation failures, retains the cause, and leaves target unchanged', () => {
   const mount = target();
+  const secret = new Error('sensitive-parser-detail');
   const failing = ports({
     dom: {
-      prepareHtml() { throw new Error('parser-error'); },
-      prepareSvg() { throw new Error('parser-error'); }
+      prepareHtml() { throw secret; },
+      prepareSvg() { throw secret; }
     }
   });
   assert.throws(() => renderProjection(project(scene, 'html'), mount, failing), (error: unknown) => {
-    assert.equal((error as Error).message, 'BROWSER_RENDER_INVALID_CONTENT:html:parser-error');
+    assert.equal((error as Error).message, 'BROWSER_RENDER_INVALID_CONTENT:html:prepare-failed');
+    assert.equal((error as Error).cause, secret);
     return true;
   });
   assert.equal(mount.calls.length, 0);
+});
+
+test('rejects hostile prepared-port output with stable errors', () => {
+  for (const [value, message] of [
+    [null, 'BROWSER_RENDER_INVALID_CONTENT:html:prepared-shape'],
+    [{ roots: [{}], nodeIds: null, edgeIds: [], focusOrderNodeIds: [] }, 'BROWSER_RENDER_INVALID_CONTENT:html:metadata']
+  ] as const) {
+    const mount = target();
+    const hostile = ports({ dom: {
+      prepareHtml: () => value as unknown as PreparedBrowserProjection<FakeNode>,
+      prepareSvg: () => value as unknown as PreparedBrowserProjection<FakeNode>
+    } });
+    assert.throws(() => renderProjection(project(scene, 'html'), mount, hostile), (error: unknown) => {
+      assert.equal((error as Error).message, message);
+      return true;
+    });
+    assert.equal(mount.calls.length, 0);
+  }
+});
+
+test('rejects invalid Three focus orders and edge endpoints before any port or target call', () => {
+  for (const mutate of [
+    (payload: { nodes: { focusOrder: number }[] }) => { payload.nodes[0]!.focusOrder = 0; },
+    (payload: { edges: { source: string }[] }) => { payload.edges[0]!.source = 'node:missing'; }
+  ]) {
+    const original = project(scene, 'three');
+    const payload = JSON.parse(original.content) as { nodes: { focusOrder: number }[]; edges: { source: string }[] };
+    mutate(payload);
+    let portCalls = 0;
+    const mount = target();
+    const customPorts = ports({ three: { prepareThree() { portCalls += 1; return prepared('three'); } } });
+    assert.throws(() => renderProjection({ ...original, content: JSON.stringify(payload) }, mount, customPorts), /BROWSER_RENDER_INVALID_CONTENT:three:(nodes|edges)/);
+    assert.equal(portCalls, 0);
+    assert.equal(mount.calls.length, 0);
+  }
+});
+
+test('makes one target commit attempt and does not claim rollback if the target throws after mutation', () => {
+  const calls: FakeNode[][] = [];
+  const throwingTarget = {
+    replaceChildren(...nodes: FakeNode[]) {
+      calls.push(nodes);
+      throw new Error('target-commit-failed');
+    }
+  };
+  assert.throws(() => renderProjection(project(scene, 'html'), throwingTarget, ports()), /target-commit-failed/);
+  assert.equal(calls.length, 1);
 });
 
 test('rejects Three semantic drift before the injected port or target can run', () => {
