@@ -45,11 +45,12 @@
 - This slice does not implement Three.js/WebGL, styling, interaction, cross-browser or assistive-technology conformance, or deployment.
 - Verified at squash merge `b5fca44556c437a7eb5d13b954c79facf9611bb4` with post-merge CI run `32845606305`, job `97794447657`, suite `88973044199`, `0` annotations, and independent QA PASS-WITH-NOTES with CRITICAL/HIGH/MEDIUM/LOW findings `0/0/1/0`.
 
-### M3d — Standards-compatible Chromium parser smoke (Candidate)
+### M3d — Standards-compatible Chromium parser smoke (Verified)
 - Execute generated HTML and SVG through a real headless Chromium `template.innerHTML` parser in CI.
 - Verify detached-tree metadata parity, HTML/SVG namespace behavior, hostile-label escaping, fail-closed active-content rejection, and exact target mutation counts.
 - Add no runtime dependency; retain the existing Node `22` verification gate.
 - This slice is a Chromium smoke test, not cross-browser or assistive-technology conformance.
+- Verified at squash merge `5234ba23432b169706875b8bcbca4347e6ee5f17` with post-merge CI run `32847376714`, job `97800124908`, suite `88977916587`, `0` annotations, and fresh independent QA PASS with CRITICAL/HIGH/MEDIUM/LOW findings `0/0/0/0`.
 
 ### Deferred M3 slices
 - Concrete Three.js/WebGL implementation, visual interaction, cross-browser and assistive-technology validation, and deployment remain deferred.
