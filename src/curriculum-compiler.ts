@@ -294,7 +294,7 @@ function compilerProvenance(relations: readonly CurriculumRelation[]): Provenanc
     observedAt: source.observedAt,
     contentHash: source.contentHash,
     transformationVersion: M2_COMPILER_VERSION,
-    derivedFrom: relations.map((relation) => relation.id)
+    derivedFrom: [source.snapshotId]
   };
 }
 
