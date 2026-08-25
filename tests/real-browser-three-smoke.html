@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Browser Three smoke</title>
+  <script type="importmap">{"imports":{"three":"/node_modules/three/build/three.module.js"}}</script>
+</head>
+<body>
+<pre id="result">RUNNING</pre>
+<div id="target"></div>
+<script type="module">
+import * as THREE from 'three';
+import { project } from '../dist/src/projections.js';
+import { renderProjection } from '../dist/src/browser-renderer.js';
+import { createBrowserThreePort } from '../dist/src/browser-three-adapter.js';
+
+const result = document.querySelector('#result');
+const target = document.querySelector('#target');
+const assert = (condition, message) => { if (!condition) throw new Error(message); };
+const scene = {
+  schemaVersion: '0.1.0', layoutVersion: 'm3f-real-browser', seed: 'm3f-real-browser',
+  inputHash: `sha256:${'a'.repeat(64)}`,
+  nodes: [
+    { id: 'node:b', semanticKind: 'course', label: 'B', position: { x: 1, y: 0, z: 0 }, focusOrder: 2, capabilities: ['inspect'] },
+    { id: 'node:a', semanticKind: 'program', label: 'A', position: { x: -1, y: 0, z: 0 }, focusOrder: 1, capabilities: ['inspect'] }
+  ],
+  edges: [{ id: 'edge:a-b', semanticKind: 'CONTAINS', source: 'node:a', target: 'node:b' }]
+};
+try {
+  const manifest = project(scene, 'three');
+  const port = createBrowserThreePort(document, THREE);
+  let mounts = 0;
+  const receipt = renderProjection(manifest, { replaceChildren(...nodes) { mounts += 1; target.replaceChildren(...nodes); } }, {
+    dom: { prepareHtml() { throw new Error('unused'); }, prepareSvg() { throw new Error('unused'); } }, three: port
+  });
+  const canvas = target.querySelector('canvas');
+  assert(mounts === 1, 'three mount count');
+  assert(receipt.committedRootCount === 1, 'three receipt root count');
+  assert(canvas?.dataset.frame === 'rendered', 'one frame was not rendered');
+  assert(canvas?.dataset.nodeCount === '2' && canvas?.dataset.edgeCount === '1', 'semantic object counts');
+  assert(canvas?.width === 320 && canvas?.height === 240, 'deterministic canvas size');
+  const context = canvas.getContext('webgl2') ?? canvas.getContext('webgl');
+  assert(context !== null && !context.isContextLost(), 'WebGL context unavailable or lost');
+  assert(context.getError() === context.NO_ERROR, 'WebGL error after frame');
+
+  const failingRuntime = { ...THREE, WebGLRenderer: class { constructor() { throw new Error('forced-webgl-failure'); } } };
+  let failedMounts = 0;
+  let rejected = false;
+  try {
+    renderProjection(manifest, { replaceChildren() { failedMounts += 1; } }, {
+      dom: { prepareHtml() { throw new Error('unused'); }, prepareSvg() { throw new Error('unused'); } },
+      three: createBrowserThreePort(document, failingRuntime)
+    });
+  } catch (error) {
+    rejected = error instanceof Error && error.message === 'BROWSER_RENDER_INVALID_CONTENT:three:prepare-failed' &&
+      error.cause instanceof Error && error.cause.message === 'BROWSER_THREE_PREPARE_FAILED';
+  }
+  assert(rejected, 'forced WebGL failure was not rejected');
+  assert(failedMounts === 0, 'failed WebGL preparation reached target');
+  result.textContent = 'M3F_BROWSER_SMOKE_PASS';
+} catch (error) {
+  result.textContent = `M3F_BROWSER_SMOKE_FAIL:${error instanceof Error ? error.message : String(error)}`;
+}
+</script>
+</body>
+</html>
