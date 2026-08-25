@@ -31,8 +31,15 @@
 - Invalid or duplicate focus order fails closed before projection.
 - Verified at squash merge `9b5be56dbb30492b7e0fe020e7df02af9981bb9a` with post-merge CI run `32837850801`, job `97770623464`, `0` annotations, and independent QA PASS with CRITICAL/HIGH/MEDIUM findings `0/0/0`.
 
+### M3b — Injected browser preparation/mount boundary (Verified)
+- Dependency-free injected ports prepare HTML/SVG or validated Three payloads off-target.
+- Schema, semantic membership, traversal order and prepared metadata fail closed before target invocation.
+- Successful validation permits exactly one target commit attempt; rollback is not guaranteed if the injected target mutates and then throws.
+- This slice does not implement a concrete DOM parser, sanitizer, Three.js/WebGL renderer, deployment, styling, interaction or assistive-technology conformance.
+- Verified at squash merge `a17e3b5fd6240221def1639a1c8d5f4d1fbfb5f3` with post-merge CI run `32841906214` and independent QA PASS with CRITICAL/HIGH/MEDIUM findings `0/0/0`.
+
 ### Deferred M3 slices
-- Browser renderer integration, visual interaction and deployment follow after semantic parity is verified.
+- Concrete browser/DOM and Three.js/WebGL implementations, visual interaction, assistive-technology validation and deployment remain deferred.
 
 ### M3 exit
 - WebGL/Three.js renderer, SVG/HTML parity and screen-reader traversal.

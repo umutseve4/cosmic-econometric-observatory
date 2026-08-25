@@ -53,7 +53,18 @@ M3a establishes a renderer-neutral parity gate before browser rendering begins.
 - SVG nodes expose ordered list semantics, position-aware accessible labels and keyboard focus without an ancestor `img` role hiding descendants from the accessibility tree.
 - Duplicate node identifiers and invalid or duplicate focus orders fail closed before any projection is emitted.
 
-Browser renderer integration, visual interaction and deployment remain later M3 slices.
+## M3b — Injected browser preparation/mount boundary
+
+M3b adds a dependency-free boundary between projection manifests and an injected browser host.
+
+- HTML/SVG content is prepared off-target through an injected DOM port; Three JSON is parsed and validated before an injected Three preparation port is called.
+- Schema, sorted/unique semantic membership, focus-order parity and prepared metadata are validated before target mutation.
+- Pre-commit failures do not invoke the target. After all checks pass, the adapter makes exactly one `replaceChildren()` commit attempt.
+- If the injected target mutates and then throws, rollback is outside the adapter contract.
+- Port-produced root nodes remain a trusted-port boundary; their semantic metadata is runtime-validated.
+- This is not a concrete DOM parser or sanitizer, a Three.js/WebGL renderer, deployment, styling, interaction, or assistive-technology conformance.
+
+Concrete browser/DOM and Three.js/WebGL implementations, visual interaction, assistive-technology validation and deployment remain later M3 slices.
 
 ## Verify
 
