@@ -64,12 +64,21 @@ test('SVG preserves descendant keyboard and screen-reader traversal semantics', 
 
 test('projection fails closed on duplicate node identifiers', () => {
   const duplicate = { ...scene, nodes: [scene.nodes[0]!, { ...scene.nodes[1]!, id: scene.nodes[0]!.id }] };
-  assert.throws(() => project(duplicate, 'three'), /DUPLICATE_PROJECTION_NODE_ID:node:b/);
+  assert.throws(() => project(duplicate, 'three'), (error: unknown) => {
+    assert.equal((error as Error).message, 'DUPLICATE_PROJECTION_NODE_ID:node:b');
+    return true;
+  });
 });
 
 test('projection fails closed on duplicate or invalid focus order', () => {
   const duplicate = { ...scene, nodes: scene.nodes.map((node) => ({ ...node, focusOrder: 1 })) };
-  assert.throws(() => project(duplicate, 'html'), /INVALID_PROJECTION_FOCUS_ORDER:node:a:1/);
+  assert.throws(() => project(duplicate, 'html'), (error: unknown) => {
+    assert.equal((error as Error).message, 'INVALID_PROJECTION_FOCUS_ORDER:node:a:1');
+    return true;
+  });
   const invalid = { ...scene, nodes: [{ ...scene.nodes[0]!, focusOrder: 0 }, scene.nodes[1]!] };
-  assert.throws(() => project(invalid, 'svg'), /INVALID_PROJECTION_FOCUS_ORDER:node:b:0/);
+  assert.throws(() => project(invalid, 'svg'), (error: unknown) => {
+    assert.equal((error as Error).message, 'INVALID_PROJECTION_FOCUS_ORDER:node:b:0');
+    return true;
+  });
 });
