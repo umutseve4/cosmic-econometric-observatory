@@ -38,8 +38,14 @@
 - This slice does not implement a concrete DOM parser, sanitizer, Three.js/WebGL renderer, deployment, styling, interaction or assistive-technology conformance.
 - Verified at squash merge `a17e3b5fd6240221def1639a1c8d5f4d1fbfb5f3` with post-merge CI run `32841906214` and independent QA PASS with CRITICAL/HIGH/MEDIUM findings `0/0/0`.
 
+### M3c — Allow-listed concrete browser DOM adapter (Candidate)
+- Parse generated HTML/SVG into detached template content before any mount-target mutation.
+- Fail closed on unexpected structure, namespaces, attributes, event handlers, styles, external links and dangling relation endpoints.
+- Re-derive semantic membership and focus traversal from the detached DOM for the existing M3b parity gate.
+- This slice does not implement Three.js/WebGL, styling, interaction, cross-browser or assistive-technology conformance, or deployment.
+
 ### Deferred M3 slices
-- Concrete browser/DOM and Three.js/WebGL implementations, visual interaction, assistive-technology validation and deployment remain deferred.
+- Concrete Three.js/WebGL implementation, visual interaction, cross-browser and assistive-technology validation, and deployment remain deferred.
 
 ### M3 exit
 - WebGL/Three.js renderer, SVG/HTML parity and screen-reader traversal.
