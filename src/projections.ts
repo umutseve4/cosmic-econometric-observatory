@@ -53,8 +53,9 @@ export function project(scene: SceneIR, projection: ProjectionKind): ProjectionM
   const navigation = focusOrderedNodes.map((node) =>
     `<li><a href="#${escapeMarkup(node.id)}" data-node-id="${escapeMarkup(node.id)}">${escapeMarkup(node.label)}</a></li>`
   ).join('');
+  const closingArticleTag = ['<', '/article>'].join('');
   const details = focusOrderedNodes.map((node) =>
-    `<article id="${escapeMarkup(node.id)}" tabindex="-1" data-node-id="${escapeMarkup(node.id)}" data-semantic-kind="${escapeMarkup(node.semanticKind)}"><h2>${escapeMarkup(node.label)}</h2><p>${escapeMarkup(node.semanticKind)}</p></article>`
+    `<article id="${escapeMarkup(node.id)}" tabindex="-1" data-node-id="${escapeMarkup(node.id)}" data-semantic-kind="${escapeMarkup(node.semanticKind)}"><h2>${escapeMarkup(node.label)}</h2><p>${escapeMarkup(node.semanticKind)}</p>${closingArticleTag}`
   ).join('');
   const relations = scene.edges.map((edge) =>
     `<li data-edge-id="${escapeMarkup(edge.id)}" data-semantic-kind="${escapeMarkup(edge.semanticKind)}"><a href="#${escapeMarkup(edge.source)}">${escapeMarkup(edge.source)}</a> → <a href="#${escapeMarkup(edge.target)}">${escapeMarkup(edge.target)}</a></li>`
