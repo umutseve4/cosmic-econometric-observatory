@@ -36,36 +36,39 @@ const server = createServer((request, response) => {
 });
 
 const timeoutMs = 60_000;
-let browser;
-const timeout = setTimeout(() => {
-  browser?.kill('SIGKILL');
-  server.close();
-  console.error(`real-browser smoke timed out after ${timeoutMs}ms`);
-  process.exitCode = 1;
-}, timeoutMs);
 
 async function runCase(testCase, port) {
   const url = `http://127.0.0.1:${port}/${testCase.page}`;
-  browser = spawn(chrome, ['--headless=new', '--no-sandbox', ...testCase.flags, '--dump-dom', url], {
+  const browser = spawn(chrome, ['--headless=new', '--no-sandbox', ...testCase.flags, '--dump-dom', url], {
     stdio: ['ignore', 'pipe', 'pipe']
   });
   let stdout = '';
   let stderr = '';
+  let timedOut = false;
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    browser.kill('SIGKILL');
+  }, timeoutMs);
   browser.stdout.setEncoding('utf8');
   browser.stderr.setEncoding('utf8');
   browser.stdout.on('data', (chunk) => { stdout += chunk; });
   browser.stderr.on('data', (chunk) => { stderr += chunk; });
-  const exit = await new Promise((resolveExit, rejectExit) => {
-    browser.once('error', rejectExit);
-    browser.once('close', (code, signal) => resolveExit({ code, signal }));
-  });
-  if (exit.code !== 0 || exit.signal !== null) throw new Error(`Chrome failed for ${testCase.page}: code=${String(exit.code)} signal=${String(exit.signal)}\n${stderr}`);
-  const resultMatch = stdout.match(/<pre id="result">([\s\S]*?)<\/pre>/u);
-  if (resultMatch === null) throw new Error(`browser page did not serialize #result for ${testCase.page}\n${stdout}\n${stderr}`);
-  const resultText = resultMatch[1]?.trim() ?? '';
-  if (resultText.startsWith(testCase.fail)) throw new Error(`browser page reported failure for ${testCase.page}\n${resultText}`);
-  if (resultText !== testCase.pass) throw new Error(`browser page reported unexpected result for ${testCase.page}: ${resultText}`);
-  console.log(testCase.pass);
+  try {
+    const exit = await new Promise((resolveExit, rejectExit) => {
+      browser.once('error', rejectExit);
+      browser.once('close', (code, signal) => resolveExit({ code, signal }));
+    });
+    if (timedOut) throw new Error(`real-browser smoke timed out for ${testCase.page} after ${timeoutMs}ms`);
+    if (exit.code !== 0 || exit.signal !== null) throw new Error(`Chrome failed for ${testCase.page}: code=${String(exit.code)} signal=${String(exit.signal)}\n${stderr}`);
+    const resultMatch = stdout.match(/<pre id="result">([\s\S]*?)<\/pre>/u);
+    if (resultMatch === null) throw new Error(`browser page did not serialize #result for ${testCase.page}\n${stdout}\n${stderr}`);
+    const resultText = resultMatch[1]?.trim() ?? '';
+    if (resultText.startsWith(testCase.fail)) throw new Error(`browser page reported failure for ${testCase.page}\n${resultText}`);
+    if (resultText !== testCase.pass) throw new Error(`browser page reported unexpected result for ${testCase.page}: ${resultText}`);
+    console.log(testCase.pass);
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 try {
@@ -77,6 +80,5 @@ try {
   if (address === null || typeof address === 'string') throw new Error('ephemeral port unavailable');
   for (const testCase of cases) await runCase(testCase, address.port);
 } finally {
-  clearTimeout(timeout);
   await new Promise((resolveClose) => server.close(resolveClose));
 }
