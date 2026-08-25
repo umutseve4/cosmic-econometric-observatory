@@ -75,7 +75,7 @@ M3f adds an exact-pinned `three@0.185.1` adapter without claiming a production r
 
 - Canonical Three DTOs are validated and prepared off-target into a detached scene.
 - A deterministic `320×240`, one-frame WebGL render preserves semantic node/edge descriptors and focus order.
-- GPU geometries, materials and renderer resources are disposed on both success and failure paths.
+- GPU geometries, materials and renderer resources are disposed on covered success and preparation-failure paths; disposal-throw resilience is not yet claimed.
 - The canvas is `aria-hidden="true"`; accessible semantics remain the responsibility of the equivalent HTML/SVG surfaces.
 - A real Chromium/SwiftShader smoke verifies `2` nodes, `1` edge, WebGL context health, `NO_ERROR`, forced-renderer rejection and `0` target mounts on preparation failure.
 

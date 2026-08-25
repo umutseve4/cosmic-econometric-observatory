@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { createReadStream, statSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { extname, normalize, resolve, sep } from 'node:path';
+import { usesDetachedProcessGroup, waitForBrowserExit } from './browser-smoke-process.mjs';
 
 const root = resolve(process.cwd());
 const chrome = process.env.CHROME_BIN || 'google-chrome';
@@ -36,39 +37,28 @@ const server = createServer((request, response) => {
 });
 
 const timeoutMs = 60_000;
+const shutdownGraceMs = 2_000;
 
 async function runCase(testCase, port) {
   const url = `http://127.0.0.1:${port}/${testCase.page}`;
   const browser = spawn(chrome, ['--headless=new', '--no-sandbox', ...testCase.flags, '--dump-dom', url], {
-    stdio: ['ignore', 'pipe', 'pipe']
+    stdio: ['ignore', 'pipe', 'pipe'],
+    detached: usesDetachedProcessGroup
   });
   let stdout = '';
   let stderr = '';
-  let timedOut = false;
-  const timeout = setTimeout(() => {
-    timedOut = true;
-    browser.kill('SIGKILL');
-  }, timeoutMs);
   browser.stdout.setEncoding('utf8');
   browser.stderr.setEncoding('utf8');
   browser.stdout.on('data', (chunk) => { stdout += chunk; });
   browser.stderr.on('data', (chunk) => { stderr += chunk; });
-  try {
-    const exit = await new Promise((resolveExit, rejectExit) => {
-      browser.once('error', rejectExit);
-      browser.once('close', (code, signal) => resolveExit({ code, signal }));
-    });
-    if (timedOut) throw new Error(`real-browser smoke timed out for ${testCase.page} after ${timeoutMs}ms`);
-    if (exit.code !== 0 || exit.signal !== null) throw new Error(`Chrome failed for ${testCase.page}: code=${String(exit.code)} signal=${String(exit.signal)}\n${stderr}`);
-    const resultMatch = stdout.match(/<pre id="result">([\s\S]*?)<\/pre>/u);
-    if (resultMatch === null) throw new Error(`browser page did not serialize #result for ${testCase.page}\n${stdout}\n${stderr}`);
-    const resultText = resultMatch[1]?.trim() ?? '';
-    if (resultText.startsWith(testCase.fail)) throw new Error(`browser page reported failure for ${testCase.page}\n${resultText}`);
-    if (resultText !== testCase.pass) throw new Error(`browser page reported unexpected result for ${testCase.page}: ${resultText}`);
-    console.log(testCase.pass);
-  } finally {
-    clearTimeout(timeout);
-  }
+  const exit = await waitForBrowserExit(browser, testCase.page, { timeoutMs, shutdownGraceMs });
+  if (exit.code !== 0 || exit.signal !== null) throw new Error(`Chrome failed for ${testCase.page}: code=${String(exit.code)} signal=${String(exit.signal)}\n${stderr}`);
+  const resultMatch = stdout.match(/<pre id="result">([\s\S]*?)<\/pre>/u);
+  if (resultMatch === null) throw new Error(`browser page did not serialize #result for ${testCase.page}\n${stdout}\n${stderr}`);
+  const resultText = resultMatch[1]?.trim() ?? '';
+  if (resultText.startsWith(testCase.fail)) throw new Error(`browser page reported failure for ${testCase.page}\n${resultText}`);
+  if (resultText !== testCase.pass) throw new Error(`browser page reported unexpected result for ${testCase.page}: ${resultText}`);
+  console.log(testCase.pass);
 }
 
 try {
