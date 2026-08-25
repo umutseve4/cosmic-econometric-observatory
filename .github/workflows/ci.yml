@@ -6,7 +6,7 @@ on:
   pull_request:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   verify:
@@ -20,40 +20,3 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
       - run: npm run verify
-
-  apply-m2a-patch:
-    if: github.event_name == 'pull_request' && github.head_ref == 'feat/m2a-curriculum-graph-core' && github.actor != 'github-actions[bot]'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: feat/m2a-curriculum-graph-core
-          fetch-depth: 2
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - name: Apply exact staged patch or capture error
-        run: |
-          set -u
-          sed -n "/python <<'PY'/,/^          PY$/p" .github/workflows/apply-m2a-alias-fix.yml | sed '1d;$d;s/^          //' > /tmp/apply.py
-          sed -i "/Path('.github\/workflows\/apply-m2a-alias-fix.yml').unlink()/d" /tmp/apply.py
-          if ! python /tmp/apply.py > /tmp/patch.log 2>&1; then
-            cp /tmp/patch.log PATCH_ERROR.txt
-            git config user.name github-actions[bot]
-            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-            git add PATCH_ERROR.txt
-            git commit -m "chore: capture M2a patch failure"
-            git push origin HEAD:feat/m2a-curriculum-graph-core
-            exit 1
-          fi
-      - run: npm ci --ignore-scripts
-      - run: npm run verify
-      - name: Commit verified source patch
-        run: |
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add src/curriculum-compiler.ts tests/curriculum-compiler.test.ts README.md docs/adr/0002-m2a-curriculum-graph-core.md
-          git commit -m "fix: enforce cumulative M2a route history"
-          git push origin HEAD:feat/m2a-curriculum-graph-core
