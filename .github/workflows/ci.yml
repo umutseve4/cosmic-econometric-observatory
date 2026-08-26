@@ -11,10 +11,14 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
-      - name: Check out source
+      - name: Check out exact source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ env.SOURCE_SHA }}
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
@@ -40,6 +44,16 @@ jobs:
         run: npm run test:browser-smoke
       - name: Run real-browser smoke suite
         run: npm run test:browser-smoke
+      - name: Capture four-state visual acceptance evidence
+        run: npm run capture:visual-acceptance
+      - name: Upload immutable visual acceptance evidence
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: cosmic-visual-acceptance-${{ env.SOURCE_SHA }}
+          path: visual-acceptance-evidence/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
       - name: Verify production dependency tree
         run: npm ls --omit=dev --depth=0
       - name: Capture artifact digest
@@ -49,9 +63,9 @@ jobs:
       - name: Upload immutable static artifact
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
-          name: cosmic-site-${{ github.sha }}
+          name: cosmic-site-${{ env.SOURCE_SHA }}
           path: dist-site/
           if-no-files-found: error
           compression-level: 0
       - name: Report artifact provenance
-        run: echo "source=${{ github.sha }} manifest_sha256=${{ steps.artifact.outputs.digest }}"
+        run: echo "source=${{ env.SOURCE_SHA }} manifest_sha256=${{ steps.artifact.outputs.digest }}"

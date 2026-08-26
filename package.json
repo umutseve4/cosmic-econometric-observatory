@@ -13,7 +13,8 @@
     "test:browser-smoke": "node scripts/run-real-browser-smoke.mjs && node scripts/run-responsive-browser-smoke.mjs",
     "test:site-negative": "node scripts/test-site-negative.mjs",
     "verify:site": "npm run build:site && npm run test:site-negative && node scripts/verify-site.mjs",
-    "verify": "npm run typecheck && npm test && npm run verify:site"
+    "verify": "npm run typecheck && npm test && npm run verify:site",
+    "capture:visual-acceptance": "node scripts/capture-visual-acceptance.mjs"
   },
   "dependencies": { "three": "0.185.1" },
   "devDependencies": { "typescript": "5.9.2", "@types/node": "22.17.2" }
