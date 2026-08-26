@@ -1,4 +1,4 @@
-name: Apply PR 34 blocker fixes
+name: Apply PR34 final blocker fixes
 on:
   push:
     branches: [feat/professional-visual-redesign]
@@ -10,35 +10,41 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with: {ref: feat/professional-visual-redesign, fetch-depth: 0}
+        with:
+          ref: feat/professional-visual-redesign
+          fetch-depth: 0
       - uses: actions/setup-node@v4
-        with: {node-version: 22, cache: npm}
-      - run: npm ci
-      - name: Apply exact replacements
-        shell: python
+        with:
+          node-version: 22
+          cache: npm
+      - name: Apply exact CSS corrections
+        shell: bash
         run: |
-          from pathlib import Path
-          def r(path,old,new):
-            p=Path(path); s=p.read_text(); n=s.count(old)
-            if n!=1: raise SystemExit(f'{path}: expected 1 match, got {n}')
-            p.write_text(s.replace(old,new))
-          r('site/styles.css','--dim:#69808b','--dim:#8299a4')
-          r('site/styles.css',".viewport-frame::before{content:'CANLI ANALİZ EVRENİ';position:absolute;z-index:5;left:1.25rem;top:1.1rem;color:var(--dim);font-size:.68rem;font-weight:700;letter-spacing:.14em}",'')
-          r('site/styles.css','.viewport canvas,.viewport svg{display:block;width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;margin:0!important;object-fit:contain}', '.viewport canvas,.viewport svg{display:block;width:100%!important;max-width:none!important;max-height:none!important;margin:0!important}.viewport canvas{height:auto!important;aspect-ratio:4/3}.viewport svg{height:100%!important}')
-          r('site/styles.css','.viewport-frame::before{left:1rem;font-size:.61rem}','')
-          r('tests/projections.test.ts','assert.match(svg, /^<svg role="group" aria-label="Academic knowledge universe">/);','assert.match(svg, /^<svg role="group" aria-label="Academic knowledge universe" viewBox="-1 -1 5 5" preserveAspectRatio="xMidYMid meet">/);')
-          r('tests/projections.test.ts','assert.ok(svg.includes(`<path data-edge-id="${encodedEdgeId}" data-semantic-kind="${encodedEdgeKind}" data-source="${encodedNodeAId}" data-target="${encodedNodeBId}"/>`));','assert.ok(svg.includes(`<path data-edge-id="${encodedEdgeId}" data-semantic-kind="${encodedEdgeKind}" data-source="${encodedNodeAId}" data-target="${encodedNodeBId}" d="M 1 1 L 2 2" fill="none" stroke="#8ca2ff" stroke-width="0.08"/>`));')
-          r('tests/projections.test.ts',"  assert.ok(svg.indexOf('data-node-id=\"node:a\"') < svg.indexOf('data-node-id=\"node:b\"'));\n});", "  assert.ok(svg.indexOf('data-node-id=\"node:a\"') < svg.indexOf('data-node-id=\"node:b\"'));\n  assert.equal((svg.match(/<path /g) ?? []).length, 1);\n  assert.match(svg, /d=\"M 1 1 L 2 2\" fill=\"none\" stroke=\"#8ca2ff\"/);\n});")
-          r('tests/browser-three-adapter.test.ts','const counters = { renders: 0, rendererDisposals: 0, resourceDisposals: 0 };','const counters = { renders: 0, rendererDisposals: 0, resourceDisposals: 0, setSize: undefined as undefined | [number, number, boolean] };')
-          r('tests/browser-three-adapter.test.ts','setSize(_width: number, _height: number, _updateStyle: boolean): void {}','setSize(width: number, height: number, updateStyle: boolean): void { counters.setSize = [width, height, updateStyle]; }')
-          r('tests/browser-three-adapter.test.ts','  assert.equal(fixture.counters.renders, 1);\n  assert.equal(fixture.counters.rendererDisposals, 1);','  assert.equal(fixture.counters.renders, 1);\n  assert.deepEqual(fixture.counters.setSize, [960, 720, false]);\n  assert.equal(fixture.counters.rendererDisposals, 1);')
-          r('tests/real-browser-responsive-smoke.html',"      if (mode === 'default' && renderMode !== 'three') throw new Error(`default render mode:${renderMode || 'missing'}`);\n      if (mode === 'fallback' && (renderMode !== 'fallback' || visual.querySelector('svg') === null)) throw new Error(`fallback render mode:${renderMode || 'missing'}`);", "      if (mode === 'default' && renderMode !== 'three') throw new Error(`default render mode:${renderMode || 'missing'}`);\n      if (mode === 'default') { const canvas=visual.querySelector('canvas'); if (!canvas || canvas.width !== 960 || canvas.height !== 720) throw new Error(`canvas buffer:${canvas?.width || 0}x${canvas?.height || 0}`); const rect=canvas.getBoundingClientRect(); if (Math.abs(rect.width / rect.height - 4 / 3) > 0.02) throw new Error(`canvas aspect:${rect.width}/${rect.height}`); }\n      if (mode === 'fallback') { const svg=visual.querySelector('svg'); if (renderMode !== 'fallback' || !svg) throw new Error(`fallback render mode:${renderMode || 'missing'}`); const values=(svg.getAttribute('viewBox') || '').trim().split(/\\s+/u).map(Number); if (values.length !== 4 || values.some((v) => !Number.isFinite(v)) || values[2] <= 0 || values[3] <= 0) throw new Error(`svg viewBox:${values.join('/')}`); const paths=[...svg.querySelectorAll('path[data-edge-id]')]; if (paths.length !== 4 || paths.some((p) => !/^M -?\\d+(?:\\.\\d+)? -?\\d+(?:\\.\\d+)? L -?\\d+(?:\\.\\d+)? -?\\d+(?:\\.\\d+)?$/u.test(p.getAttribute('d') || ''))) throw new Error(`svg edge geometry:${paths.length}`); if (svg.querySelectorAll('g[data-node-id]').length !== 5) throw new Error('svg node count'); }")
+          node <<'NODE'
+          const fs = require('node:fs');
+          const p = 'site/styles.css';
+          let s = fs.readFileSync(p, 'utf8');
+          const replacements = [
+            ['--dim:#69808b', '--dim:#8299a4'],
+            ['.viewport-frame::before{content:"CANLI ANALİZ EVRENİ";position:absolute;left:1.4rem;top:1rem;z-index:3;font-size:.64rem;font-weight:900;letter-spacing:.18em;color:#9eb0b9}', ''],
+            ['.viewport canvas,.viewport svg{display:block;width:100%!important;height:100%!important;border-radius:16px}', '.viewport canvas{display:block;width:100%!important;height:auto!important;aspect-ratio:4/3;border-radius:16px}.viewport svg{display:block;width:100%!important;height:100%!important;border-radius:16px}'],
+            ['.viewport-frame::before{left:1rem;font-size:.61rem}', '']
+          ];
+          for (const [from, to] of replacements) {
+            if (!s.includes(from)) throw new Error(`missing CSS contract: ${from}`);
+            s = s.replace(from, to);
+          }
+          fs.writeFileSync(p, s);
+          NODE
+      - run: npm ci
       - run: npm run verify
       - run: npm run test:browser-smoke
-      - run: |
-          git rm .github/workflows/apply-pr34-blocker-fixes.yml
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add site/styles.css tests/browser-three-adapter.test.ts tests/projections.test.ts tests/real-browser-responsive-smoke.html
-          git commit -m 'test(site): close visual renderer acceptance blockers'
+      - name: Commit verified patch and remove temporary workflow
+        shell: bash
+        run: |
+          rm .github/workflows/apply-pr34-blocker-fixes.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add site/styles.css .github/workflows/apply-pr34-blocker-fixes.yml
+          git commit -m "fix(site): close professional visual acceptance blockers"
           git push origin HEAD:feat/professional-visual-redesign
