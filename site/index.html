@@ -21,8 +21,8 @@
         <h1 id="hero-title">A universe where every claim has coordinates.</h1>
         <p class="lede">The observatory turns source-bound curriculum evidence into stable identities, inspectable relations, and renderer-neutral projections—without silently correcting history.</p>
         <dl class="metrics">
-          <div><dt>Snapshot relations</dt><dd>144</dd></div>
-          <div><dt>Source offerings</dt><dd>164</dd></div>
+          <div><dt>Demo nodes</dt><dd>5</dd></div>
+          <div><dt>Demo relations</dt><dd>4</dd></div>
           <div><dt>Artifact surfaces</dt><dd>2 / 2</dd></div>
         </dl>
       </div>
@@ -38,6 +38,16 @@
     <footer><span>Cosmic Econometric Observatory</span><span>Bounded M3 artifact · no production claim</span></footer>
   </main>
   <pre id="result" class="smoke-result" aria-live="polite">RUNNING</pre>
+  <script>
+    (() => {
+      const result = document.querySelector('#result');
+      const report = (message) => {
+        if (result.textContent === 'RUNNING') result.textContent = `M3G_SITE_SMOKE_FAIL:MODULE:${message}`;
+      };
+      window.addEventListener('error', (event) => report(event.message || 'script-error'));
+      window.addEventListener('unhandledrejection', (event) => report(event.reason instanceof Error ? event.reason.message : String(event.reason)));
+    })();
+  </script>
   <script type="module" src="./app.js"></script>
 </body>
 </html>
