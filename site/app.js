@@ -56,9 +56,9 @@ try {
 }
 
 function runInvalidBindingPreflightSmoke(htmlTarget, htmlReceipt, snapshotId) {
-  const first = htmlTarget.querySelector('nav a[data-node-id]'); const list = first?.parentElement;
-  if (!first || !list) throw new Error('missing preflight target');
-  const duplicate = first.cloneNode(true); list.append(duplicate);
+  const first = htmlTarget.querySelector('nav a[data-node-id]'); const parent = first?.parentElement;
+  if (!first || !parent) throw new Error('missing preflight target');
+  const duplicate = first.cloneNode(true); parent.append(duplicate);
   let dispatches = 0; let rejected = false;
   try { bindNodeSelectionSurface({ root: htmlTarget, projection: 'html', snapshotId, focusOrderNodeIds: htmlReceipt.focusOrderNodeIds, dispatch() { dispatches += 1; return { outcome: 'noop', state: { selectedNodeId: null }, logicalCommitCount: 0 }; }, initialState: { selectedNodeId: null } }); }
   catch (error) { rejected = error instanceof Error && error.message === 'NODE_SELECTION_DUPLICATE_TARGET'; }
@@ -66,32 +66,52 @@ function runInvalidBindingPreflightSmoke(htmlTarget, htmlReceipt, snapshotId) {
   if (!rejected || dispatches !== 0 || htmlTarget.querySelector('[data-selected]')) throw new Error('binding preflight mutation');
 }
 
+function captureAttributeMatrix(roots) {
+  return roots.flatMap((root, rootIndex) => [...root.querySelectorAll('[data-node-id]')].map((target, targetIndex) => [rootIndex, targetIndex, target.getAttribute('data-node-id'), target.getAttribute('data-selected'), target.getAttribute('aria-current')]));
+}
+function sameMatrix(left, right) { return JSON.stringify(left) === JSON.stringify(right); }
+function capturePosition(target) {
+  const parent = target.parentNode; const next = target.nextSibling;
+  if (!parent) throw new Error('missing target parent');
+  return () => parent.insertBefore(target, next);
+}
+
 function runM3iSmoke({ htmlTarget, visualTarget, visualReceipt, controller, commitCount }) {
   const htmlTargets = [...htmlTarget.querySelectorAll('nav a[data-node-id]')]; const firstHtmlTarget = htmlTargets[0]; const secondHtmlTarget = htmlTargets[1];
   const expectedNodeId = firstHtmlTarget?.getAttribute('data-node-id'); const alternateNodeId = secondHtmlTarget?.getAttribute('data-node-id');
   if (!firstHtmlTarget || !secondHtmlTarget || !expectedNodeId || !alternateNodeId) throw new Error('missing HTML selection targets');
-  const expectRejectedWithoutCommit = (mutate, restore, label) => {
+
+  const expectRejectedWithoutCommit = (surfaceRoot, mutate, restore, label) => {
+    const htmlBefore = htmlTarget.innerHTML; const visualBefore = visualTarget.innerHTML; const attributesBefore = captureAttributeMatrix([htmlTarget, visualTarget]);
     mutate(); let rejected = false;
     try { controller.dispatch({ type: 'select', nodeId: alternateNodeId, expectedSnapshotId: scene.inputHash }); }
     catch (error) { rejected = error instanceof Error && (error.message === 'NODE_SELECTION_TARGET_SET_CHANGED' || error.message === 'NODE_SELECTION_STALE_TARGET_ID'); }
     restore();
-    if (!rejected || controller.getState().selectedNodeId !== null || commitCount() !== 0 || htmlTarget.querySelector('[data-selected]') || visualTarget.querySelector('[data-selected]')) throw new Error(`dynamic target gate:${label}`);
+    const domRestored = htmlTarget.innerHTML === htmlBefore && visualTarget.innerHTML === visualBefore;
+    if (!rejected || controller.getState().selectedNodeId !== null || commitCount() !== 0 || !domRestored || !sameMatrix(attributesBefore, captureAttributeMatrix([htmlTarget, visualTarget])) || surfaceRoot.querySelector('[data-selected]')) throw new Error(`dynamic target gate:${label}`);
   };
-  const list = firstHtmlTarget.parentElement; if (!list) throw new Error('missing HTML list');
-  const clone = firstHtmlTarget.cloneNode(true);
-  expectRejectedWithoutCommit(() => list.append(clone), () => clone.remove(), 'insert');
-  const secondNext = secondHtmlTarget.nextSibling;
-  expectRejectedWithoutCommit(() => secondHtmlTarget.remove(), () => list.insertBefore(secondHtmlTarget, secondNext), 'remove');
-  const firstNext = firstHtmlTarget.nextSibling;
-  expectRejectedWithoutCommit(() => list.append(firstHtmlTarget), () => list.insertBefore(firstHtmlTarget, firstNext), 'reorder');
-  const nav = firstHtmlTarget.closest('nav'); const navParent = nav?.parentElement; const navNext = nav?.nextSibling;
-  if (!nav || !navParent) throw new Error('missing HTML nav');
-  expectRejectedWithoutCommit(() => navParent.insertBefore(firstHtmlTarget, nav), () => list.insertBefore(firstHtmlTarget, firstNext), 'selector-membership');
-  const originalId = secondHtmlTarget.getAttribute('data-node-id');
-  expectRejectedWithoutCommit(() => secondHtmlTarget.setAttribute('data-node-id', 'node:tampered'), () => secondHtmlTarget.setAttribute('data-node-id', originalId), 'id');
+  const exerciseSurface = (root, selector, label, membership) => {
+    const targets = [...root.querySelectorAll(selector)]; const first = targets[0]; const second = targets[1];
+    if (!first || !second || !first.parentNode || !second.parentNode) throw new Error(`missing ${label} targets`);
+    const clone = first.cloneNode(true);
+    expectRejectedWithoutCommit(root, () => first.parentNode.insertBefore(clone, first.nextSibling), () => clone.remove(), `${label}:insert`);
+    const restoreRemoval = capturePosition(first);
+    expectRejectedWithoutCommit(root, () => first.remove(), restoreRemoval, `${label}:remove`);
+    const restoreReorder = capturePosition(first);
+    expectRejectedWithoutCommit(root, () => second.parentNode.insertBefore(first, second), restoreReorder, `${label}:reorder`);
+    const restoreMembership = membership(first);
+    expectRejectedWithoutCommit(root, restoreMembership.mutate, restoreMembership.restore, `${label}:selector-membership`);
+    const originalId = second.getAttribute('data-node-id');
+    if (originalId === null) throw new Error(`missing ${label} ID`);
+    expectRejectedWithoutCommit(root, () => second.setAttribute('data-node-id', 'node:tampered'), () => second.setAttribute('data-node-id', originalId), `${label}:id`);
+  };
+  exerciseSurface(htmlTarget, 'nav a[data-node-id]', 'html', (target) => {
+    const restore = capturePosition(target); const nav = target.closest('nav'); const parent = nav?.parentNode;
+    if (!nav || !parent) throw new Error('missing HTML nav');
+    return { mutate: () => parent.insertBefore(target, nav), restore };
+  });
   if (visualReceipt.outcome === 'fallback') {
-    const svgTarget = visualTarget.querySelector('svg g[role="listitem"][data-node-id]'); if (!svgTarget) throw new Error('missing SVG membership target');
-    expectRejectedWithoutCommit(() => svgTarget.removeAttribute('role'), () => svgTarget.setAttribute('role', 'listitem'), 'svg-membership');
+    exerciseSurface(visualTarget, 'svg g[role="listitem"][data-node-id]', 'svg', (target) => ({ mutate: () => target.removeAttribute('role'), restore: () => target.setAttribute('role', 'listitem') }));
   }
 
   firstHtmlTarget.focus(); if (document.activeElement !== firstHtmlTarget) throw new Error('HTML focus target');
@@ -104,13 +124,14 @@ function runM3iSmoke({ htmlTarget, visualTarget, visualReceipt, controller, comm
     if (!firstSvgTarget || !secondSvgTarget || !secondNodeId) throw new Error('missing SVG rollback targets');
     secondHtmlTarget.setAttribute('data-selected', 'legacy-html-selected'); secondHtmlTarget.setAttribute('aria-current', 'legacy-html-current');
     secondSvgTarget.setAttribute('data-selected', 'legacy-svg-selected'); secondSvgTarget.setAttribute('aria-current', 'legacy-svg-current');
+    const beforeRollback = captureAttributeMatrix([htmlTarget, visualTarget]);
     const originalSetAttribute = secondSvgTarget.setAttribute.bind(secondSvgTarget); let injected = false;
     secondSvgTarget.setAttribute = (name, value) => { if (!injected && name === 'data-selected') { injected = true; throw new Error('M3I_INJECTED_SVG_APPLY_FAILURE'); } originalSetAttribute(name, value); };
     let applyRejected = false;
     try { controller.dispatch({ type: 'select', nodeId: secondNodeId, expectedSnapshotId: scene.inputHash }); }
     catch (error) { applyRejected = error instanceof Error && error.message === 'M3I_INJECTED_SVG_APPLY_FAILURE'; }
     secondSvgTarget.setAttribute = originalSetAttribute;
-    if (!applyRejected || controller.getState().selectedNodeId !== expectedNodeId || commitCount() !== 1 || firstHtmlTarget.getAttribute('aria-current') !== 'true' || firstSvgTarget.getAttribute('aria-current') !== 'true' || secondHtmlTarget.getAttribute('data-selected') !== 'legacy-html-selected' || secondHtmlTarget.getAttribute('aria-current') !== 'legacy-html-current' || secondSvgTarget.getAttribute('data-selected') !== 'legacy-svg-selected' || secondSvgTarget.getAttribute('aria-current') !== 'legacy-svg-current') throw new Error('cross-surface exact rollback');
+    if (!applyRejected || controller.getState().selectedNodeId !== expectedNodeId || commitCount() !== 1 || !sameMatrix(beforeRollback, captureAttributeMatrix([htmlTarget, visualTarget]))) throw new Error('cross-surface exact rollback');
     secondHtmlTarget.removeAttribute('data-selected'); secondHtmlTarget.removeAttribute('aria-current'); secondSvgTarget.removeAttribute('data-selected'); secondSvgTarget.removeAttribute('aria-current');
   }
 
