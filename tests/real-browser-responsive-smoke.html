@@ -11,19 +11,26 @@
   </style>
 </head>
 <body>
-  <iframe id="site" title="Kozmik Ekonometri responsive test" src="/dist-site/index.html?responsive-smoke=1"></iframe>
+  <iframe id="site" title="Kozmik Ekonometri responsive test"></iframe>
   <pre id="result">RESPONSIVE_PRODUCT_SMOKE_RUNNING</pre>
   <script>
     const PASS = 'RESPONSIVE_PRODUCT_SMOKE_PASS';
     const FAIL = 'RESPONSIVE_PRODUCT_SMOKE_FAIL';
     const result = document.querySelector('#result');
     const frame = document.querySelector('#site');
-    const requestedWidth = Number(new URL(location.href).searchParams.get('width'));
-    const englishLeak = /\b(selected node|knowledge nodes|university|department|faculty|course|root node|child of|contains|belongs to)\b/i;
+    const params = new URL(location.href).searchParams;
+    const requestedWidth = Number(params.get('width'));
+    const mode = params.get('mode');
+    const englishLeak = /\b(selected node|knowledge nodes|university|department|faculty|course|program|root node|child of|contains|belongs to)\b/i;
     if (!Number.isInteger(requestedWidth) || requestedWidth < 240 || requestedWidth > 2000) throw new Error('invalid requested width');
+    if (mode !== 'default' && mode !== 'fallback') throw new Error('invalid render mode');
     frame.style.width = `${requestedWidth}px`;
 
     function fail(message) { result.textContent = `${FAIL}:${message}`; }
+    function describedText(doc, element) {
+      const ids = (element.getAttribute('aria-describedby') || '').trim().split(/\s+/u).filter(Boolean);
+      return ids.map((id) => doc.getElementById(id)?.textContent || '').join(' ');
+    }
     function inspect() {
       const doc = frame.contentDocument;
       if (!frame.contentWindow || !doc) throw new Error('iframe unavailable');
@@ -31,15 +38,30 @@
       if (viewport !== requestedWidth) throw new Error(`viewport mismatch:${viewport}/${requestedWidth}`);
       if (doc.documentElement.scrollWidth > viewport || doc.body.scrollWidth > viewport) throw new Error(`horizontal overflow:${viewport}/${doc.documentElement.scrollWidth}/${doc.body.scrollWidth}`);
       const offenders = [...doc.body.querySelectorAll('*')].filter((element) => {
-        if (element.matches('script, style, [hidden]') || element.closest('[aria-hidden="true"]')) return false;
+        if (element.matches('script, style, [hidden], .ambient-one, .ambient-two')) return false;
+        const style = frame.contentWindow.getComputedStyle(element);
+        if (style.display === 'none' || style.visibility === 'hidden') return false;
         const rect = element.getBoundingClientRect();
         return rect.width > 0 && (rect.left < -1 || rect.right > viewport + 1);
       });
       if (offenders.length > 0) throw new Error(`clipped elements:${offenders.slice(0, 5).map((element) => element.id || element.className || element.tagName).join(',')}`);
       const roots = ['#webgl-universe', '#html-universe'].map((selector) => doc.querySelector(selector)).filter(Boolean);
-      const surfaces = roots.flatMap((root) => [root.textContent || '', ...[...root.querySelectorAll('[aria-label], [title], svg title')].flatMap((element) => [element.getAttribute('aria-label') || '', element.getAttribute('title') || '', element.textContent || ''])]);
+      const surfaces = roots.flatMap((root) => {
+        const elements = [root, ...root.querySelectorAll('*')];
+        return elements.flatMap((element) => [
+          element === root ? root.textContent || '' : '',
+          element.getAttribute?.('aria-label') || '', element.getAttribute?.('title') || '',
+          element.getAttribute?.('alt') || '', element.getAttribute?.('placeholder') || '',
+          element.getAttribute?.('value') || '', element.getAttribute?.('aria-description') || '',
+          describedText(doc, element), element.matches?.('svg title') ? element.textContent || '' : ''
+        ]);
+      });
       const leak = surfaces.find((value) => englishLeak.test(value));
       if (leak) throw new Error(`English accessible-name leak:${leak.slice(0, 80)}`);
+      const visual = doc.querySelector('#webgl-universe');
+      const renderMode = visual?.dataset.renderMode;
+      if (mode === 'default' && renderMode !== 'three') throw new Error(`default render mode:${renderMode || 'missing'}`);
+      if (mode === 'fallback' && (renderMode !== 'fallback' || visual.querySelector('svg') === null)) throw new Error(`fallback render mode:${renderMode || 'missing'}`);
       const runtime = doc.querySelector('#result')?.textContent?.trim();
       if (runtime !== 'M3G_SITE_SMOKE_PASS') throw new Error(`runtime marker:${runtime || 'missing'}`);
       result.textContent = PASS;
@@ -59,6 +81,7 @@
       poll();
     }, { once: true });
     frame.addEventListener('error', () => fail('iframe load error'), { once: true });
+    frame.src = `/dist-site/index.html?responsive-smoke=1${mode === 'fallback' ? '&force-fallback=true' : ''}`;
   </script>
 </body>
 </html>
