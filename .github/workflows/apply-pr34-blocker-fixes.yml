@@ -17,23 +17,18 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - name: Apply exact CSS corrections
+      - name: Apply bounded CSS corrections
         shell: bash
         run: |
           node <<'NODE'
           const fs = require('node:fs');
           const p = 'site/styles.css';
           let s = fs.readFileSync(p, 'utf8');
-          const replacements = [
-            ['--dim:#69808b', '--dim:#8299a4'],
-            ['.viewport-frame::before{content:"CANLI ANALİZ EVRENİ";position:absolute;left:1.4rem;top:1rem;z-index:3;font-size:.64rem;font-weight:900;letter-spacing:.18em;color:#9eb0b9}', ''],
-            ['.viewport canvas,.viewport svg{display:block;width:100%!important;height:100%!important;background:radial-gradient(circle at 50% 35%,rgba(41,78,105,.2),transparent 55%);border-radius:16px}', '.viewport canvas{display:block;width:100%!important;height:auto!important;aspect-ratio:4/3;background:radial-gradient(circle at 50% 35%,rgba(41,78,105,.2),transparent 55%);border-radius:16px}.viewport svg{display:block;width:100%!important;height:100%!important;background:radial-gradient(circle at 50% 35%,rgba(41,78,105,.2),transparent 55%);border-radius:16px}'],
-            ['.viewport-frame::before{left:1rem;font-size:.61rem}', '']
-          ];
-          for (const [from, to] of replacements) {
-            if (!s.includes(from)) throw new Error(`missing CSS contract: ${from}`);
-            s = s.replace(from, to);
-          }
+          s = s.replace('--dim:#69808b', '--dim:#8299a4');
+          s = s.replace(/\.viewport-frame::before\{content:"CANLI ANALİZ EVRENİ";[^}]*\}/u, '');
+          s = s.replace(/\.viewport canvas,\.viewport svg\{([^}]*)\}/u, (_all, rules) => `.viewport canvas{${rules.replace('height:100%!important', 'height:auto!important')}aspect-ratio:4/3}.viewport svg{${rules}}`);
+          s = s.replace(/\.viewport-frame::before\{left:1rem;font-size:\.61rem\}/u, '');
+          if (!s.includes('--dim:#8299a4') || s.includes('CANLI ANALİZ EVRENİ') || !s.includes('.viewport canvas{') || !s.includes('height:auto!important') || !s.includes('aspect-ratio:4/3') || !s.includes('.viewport svg{')) throw new Error('CSS blocker postcondition failed');
           fs.writeFileSync(p, s);
           NODE
       - run: npm ci
