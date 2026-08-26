@@ -66,8 +66,15 @@
 - Original implementation squash-merged as `5137f812e4f5733039e1880f4dd8b89b7b66c517` after PR-head CI [run `32878695626`](https://github.com/umutseve4/cosmic-econometric-observatory/actions/runs/32878695626), [job `97902742320`](https://github.com/umutseve4/cosmic-econometric-observatory/actions/runs/32878695626/job/97902742320), completed successfully from `2026-08-25T17:34:41Z` to `2026-08-25T17:35:03Z`; no exact-main native push-CI result is claimed for that historical merge SHA.
 - Closure/hardening squash merge `6daa4b3ba9e6941335d081bed1a15266ff5f2011` contains the M3f implementation and bounds browser process-tree/handle release plus HTTP server shutdown. Its exact-main native push CI [run `32895153509`](https://github.com/umutseve4/cosmic-econometric-observatory/actions/runs/32895153509), [job `97955989072`](https://github.com/umutseve4/cosmic-econometric-observatory/actions/runs/32895153509/job/97955989072), suite `89112873525`, completed successfully from `2026-08-25T20:24:30Z` to `2026-08-25T20:24:53Z` with `0` annotations. This verifies the closure tree without retroactively attributing a run to the historical implementation merge.
 
+### M3h — Deterministic failure fallback orchestration (Verified)
+- Preflight Three and semantic HTML/SVG manifests before preparation and require exact schema, node, edge, focus-order and trusted descriptor parity.
+- Fall back only on the exact pre-commit Three preparation failure; target-boundary provenance prevents a reserved-message target error from triggering a second commit.
+- Emit a deterministic receipt and preserve visible errors for every non-eligible failure class.
+- Node and real Chromium/SwiftShader tests cover success, forced WebGL failure, semantic drift, malformed manifests/content and target collision behavior.
+- Verified at squash merge `38e8314978ef87d7c962c36f6161580d4c6e9f90` with exact-main [`verify` check run `98129078877`](https://api.github.com/repos/umutseve4/cosmic-econometric-observatory/check-runs/98129078877), suite `89262843081`, completed successfully from `2026-08-26T09:28:44Z` to `2026-08-26T09:29:19Z`, and independent exact-head QA PASS with CRITICAL/HIGH/MEDIUM/LOW findings `0/0/0/0`.
+
 ### Deferred M3 slices
-- Continuous rendering, camera/selection interaction, responsive application shell, cross-browser and assistive-technology validation, production-scale performance, disposal-throw resilience, failure fallback orchestration, and deployment remain deferred.
+- Continuous rendering, camera/selection interaction, responsive application shell, cross-browser and assistive-technology validation, production-scale performance, disposal-throw resilience, and deployment remain deferred.
 
 ### M3 exit
 - WebGL/Three.js renderer, SVG/HTML parity and screen-reader traversal.
