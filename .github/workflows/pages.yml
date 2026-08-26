@@ -1,0 +1,73 @@
+name: Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: read
+    steps:
+      - name: Check out exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Verify source and deterministic artifact
+        run: npm run verify
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+      - name: Verify packaged browser runtime
+        run: npm run test:browser-smoke
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+      - name: Record promoted artifact provenance
+        id: provenance
+        shell: bash
+        run: |
+          manifest_sha256="$(sha256sum dist-site/artifact-manifest.json | cut -d ' ' -f 1)"
+          artifact_files="$(find dist-site -type f | wc -l)"
+          test "$artifact_files" -eq 13
+          echo "manifest_sha256=${manifest_sha256}" >> "$GITHUB_OUTPUT"
+          {
+            echo '### Pages artifact provenance'
+            printf -- '- Source SHA: `%s`\n' "$GITHUB_SHA"
+            printf -- '- Manifest SHA-256: `%s`\n' "$manifest_sha256"
+            printf -- '- Artifact files: `%s`\n' "$artifact_files"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Read GitHub Pages configuration
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d
+      - name: Upload verified Pages artifact
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9
+        with:
+          path: dist-site
+
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy exact uploaded artifact
+        id: deployment
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128
