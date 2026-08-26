@@ -55,13 +55,13 @@ function htmlRoots(): FakeNode[] {
   return [nav, main, section];
 }
 function svgRoots(): FakeNode[] {
-  return [e('svg', S, { role: 'group', 'aria-label': 'Academic knowledge universe' }, [
+  return [e('svg', S, { role: 'group', 'aria-label': 'Academic knowledge universe', viewbox: '-1 -1 5 5', preserveaspectratio: 'xMidYMid meet' }, [
     e('g', S, { role: 'list', 'aria-label': 'Knowledge nodes' }, [
       e('g', S, { id: 'node:a', role: 'listitem', tabindex: '0', 'data-node-id': 'node:a', 'data-semantic-kind': 'program', 'aria-label': '1 of 2: A (program)' }, [e('circle', S, { cx: '1', cy: '1', r: '1' }), e('title', S, {}, [t('A')])]),
       e('g', S, { id: 'node:b', role: 'listitem', tabindex: '0', 'data-node-id': 'node:b', 'data-semantic-kind': 'course', 'aria-label': '2 of 2: B (course)' }, [e('circle', S, { cx: '2', cy: '2', r: '1' }), e('title', S, {}, [t('B')])])
     ]),
     e('g', S, { role: 'group', 'aria-label': 'Knowledge relations' }, [
-      e('path', S, { 'data-edge-id': 'edge:a-b', 'data-semantic-kind': 'CONTAINS', 'data-source': 'node:a', 'data-target': 'node:b' })
+      e('path', S, { 'data-edge-id': 'edge:a-b', 'data-semantic-kind': 'CONTAINS', 'data-source': 'node:a', 'data-target': 'node:b', d: 'M 1 1 L 2 2', fill: 'none', stroke: '#8ca2ff', 'stroke-width': '0.08' })
     ])
   ])];
 }
@@ -109,7 +109,7 @@ test('rejects dangling SVG endpoints without target mutation', () => {
   const roots = svgRoots();
   const svg = roots[0] as FakeElement;
   const edgeGroup = svg.childNodes[1] as FakeElement;
-  edgeGroup.childNodes[0] = e('path', S, { 'data-edge-id': 'edge:a-b', 'data-semantic-kind': 'CONTAINS', 'data-source': 'node:a', 'data-target': 'node:missing' });
+  edgeGroup.childNodes[0] = e('path', S, { 'data-edge-id': 'edge:a-b', 'data-semantic-kind': 'CONTAINS', 'data-source': 'node:a', 'data-target': 'node:missing', d: 'M 1 1 L 2 2', fill: 'none', stroke: '#8ca2ff', 'stroke-width': '0.08' });
   assertRedacted(project(scene, 'svg'), roots, 'BROWSER_DOM_INVALID_CONTENT:svg:edge-endpoint');
 });
 
