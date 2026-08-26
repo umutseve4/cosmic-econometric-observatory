@@ -22,61 +22,33 @@ function prepared(manifest: ProjectionManifestV2, root: string): PreparedBrowser
 }
 
 test('keeps the successful Three path to exactly one target commit', () => {
-  const three = project(scene, 'three');
-  const html = project(scene, 'html');
-  let targetCalls = 0;
-  let fallbackCalls = 0;
-  const receipt = renderThreeWithFallback(three, html, { replaceChildren(root) {
-    targetCalls += 1;
-    assert.equal(root, 'three-root');
-  } }, {
-    dom: {
-      prepareHtml() { fallbackCalls += 1; return prepared(html, 'html-root'); },
-      prepareSvg() { throw new Error('unused'); }
-    },
+  const three = project(scene, 'three'); const html = project(scene, 'html');
+  let targetCalls = 0; let fallbackCalls = 0;
+  const receipt = renderThreeWithFallback(three, html, { replaceChildren(root) { targetCalls += 1; assert.equal(root, 'three-root'); } }, {
+    dom: { prepareHtml() { fallbackCalls += 1; return prepared(html, 'html-root'); }, prepareSvg() { throw new Error('unused'); } },
     three: { prepareThree() { return prepared(three, 'three-root'); } }
   });
-  assert.equal(targetCalls, 1);
-  assert.equal(fallbackCalls, 0);
-  assert.equal(receipt.outcome, 'three');
-  assert.equal(receipt.fallbackProjection, null);
-  assert.equal(receipt.primaryFailure, null);
+  assert.equal(targetCalls, 1); assert.equal(fallbackCalls, 0);
+  assert.equal(receipt.outcome, 'three'); assert.equal(receipt.fallbackProjection, null); assert.equal(receipt.primaryFailure, null);
 });
 
 test('mounts one usable semantic fallback after zero failed-Three target commits', () => {
-  const three = project(scene, 'three');
-  const html = project(scene, 'html');
-  let threePreparations = 0;
-  let fallbackPreparations = 0;
-  const committedRoots: string[] = [];
-  const receipt = renderThreeWithFallback(three, html, { replaceChildren(...roots) {
-    committedRoots.push(...roots);
-  } }, {
-    dom: {
-      prepareHtml() { fallbackPreparations += 1; return prepared(html, 'html-root'); },
-      prepareSvg() { throw new Error('unused'); }
-    },
-    three: { prepareThree() {
-      threePreparations += 1;
-      throw new Error('forced-webgl-failure');
-    } }
+  const three = project(scene, 'three'); const html = project(scene, 'html');
+  let threePreparations = 0; let fallbackPreparations = 0; const committedRoots: string[] = [];
+  const receipt = renderThreeWithFallback(three, html, { replaceChildren(...roots) { committedRoots.push(...roots); } }, {
+    dom: { prepareHtml() { fallbackPreparations += 1; return prepared(html, 'html-root'); }, prepareSvg() { throw new Error('unused'); } },
+    three: { prepareThree() { threePreparations += 1; throw new Error('forced-webgl-failure'); } }
   });
-  assert.equal(threePreparations, 1);
-  assert.equal(fallbackPreparations, 1);
-  assert.deepEqual(committedRoots, ['html-root']);
-  assert.equal(receipt.outcome, 'fallback');
-  assert.equal(receipt.fallbackProjection, 'html');
+  assert.equal(threePreparations, 1); assert.equal(fallbackPreparations, 1); assert.deepEqual(committedRoots, ['html-root']);
+  assert.equal(receipt.outcome, 'fallback'); assert.equal(receipt.fallbackProjection, 'html');
   assert.equal(receipt.primaryFailure, 'BROWSER_RENDER_INVALID_CONTENT:three:prepare-failed');
-  assert.deepEqual(receipt.render.nodeIds, three.nodeIds);
-  assert.deepEqual(receipt.render.edgeIds, three.edgeIds);
+  assert.deepEqual(receipt.render.nodeIds, three.nodeIds); assert.deepEqual(receipt.render.edgeIds, three.edgeIds);
   assert.deepEqual(receipt.render.focusOrderNodeIds, three.focusOrderNodeIds);
 });
 
 test('rejects semantic drift before either preparation port or target is invoked', () => {
-  const three = project(scene, 'three');
-  const html = project(scene, 'html');
-  const drifted = { ...html, focusOrderNodeIds: [...html.focusOrderNodeIds].reverse() };
-  let calls = 0;
+  const three = project(scene, 'three'); const html = project(scene, 'html');
+  const drifted = { ...html, focusOrderNodeIds: [...html.focusOrderNodeIds].reverse() }; let calls = 0;
   assert.throws(() => renderThreeWithFallback(three, drifted, { replaceChildren() { calls += 1; } }, {
     dom: { prepareHtml() { calls += 1; return prepared(html, 'html-root'); }, prepareSvg() { throw new Error('unused'); } },
     three: { prepareThree() { calls += 1; return prepared(three, 'three-root'); } }
@@ -84,14 +56,19 @@ test('rejects semantic drift before either preparation port or target is invoked
   assert.equal(calls, 0);
 });
 
+test('rejects an invalid fallback manifest before any caller port or target invocation', () => {
+  const three = project(scene, 'three'); const html = project(scene, 'html'); let calls = 0;
+  const invalid = { ...html, schemaVersion: '9.0.0' } as unknown as ProjectionManifestV2;
+  assert.throws(() => renderThreeWithFallback(three, invalid, { replaceChildren() { calls += 1; } }, {
+    dom: { prepareHtml() { calls += 1; return prepared(html, 'html-root'); }, prepareSvg() { calls += 1; return prepared(html, 'svg-root'); } },
+    three: { prepareThree() { calls += 1; return prepared(three, 'three-root'); } }
+  }), /BROWSER_RENDER_UNSUPPORTED_SCHEMA:9.0.0/);
+  assert.equal(calls, 0);
+});
+
 test('does not treat malformed Three content or target commit failure as a fallback condition', () => {
-  const three = project(scene, 'three');
-  const html = project(scene, 'html');
-  let fallbackCalls = 0;
-  const dom = {
-    prepareHtml() { fallbackCalls += 1; return prepared(html, 'html-root'); },
-    prepareSvg() { throw new Error('unused'); }
-  };
+  const three = project(scene, 'three'); const html = project(scene, 'html'); let fallbackCalls = 0;
+  const dom = { prepareHtml() { fallbackCalls += 1; return prepared(html, 'html-root'); }, prepareSvg() { throw new Error('unused'); } };
   assert.throws(() => renderThreeWithFallback({ ...three, content: '{' }, html, { replaceChildren() {} }, {
     dom, three: { prepareThree() { return prepared(three, 'three-root'); } }
   }), /BROWSER_RENDER_INVALID_CONTENT:three:malformed-json/);
@@ -100,4 +77,18 @@ test('does not treat malformed Three content or target commit failure as a fallb
     dom, three: { prepareThree() { return prepared(three, 'three-root'); } }
   }), /target-failed/);
   assert.equal(fallbackCalls, 0);
+});
+
+test('never reclassifies a mutate-then-throw target collision as preparation failure', () => {
+  const three = project(scene, 'three'); const html = project(scene, 'html');
+  let commitAttempts = 0; let fallbackPreparations = 0;
+  assert.throws(() => renderThreeWithFallback(three, html, { replaceChildren() {
+    commitAttempts += 1;
+    throw new Error('BROWSER_RENDER_INVALID_CONTENT:three:prepare-failed');
+  } }, {
+    dom: { prepareHtml() { fallbackPreparations += 1; return prepared(html, 'html-root'); }, prepareSvg() { throw new Error('unused'); } },
+    three: { prepareThree() { return prepared(three, 'three-root'); } }
+  }), /BROWSER_RENDER_INVALID_CONTENT:three:prepare-failed/);
+  assert.equal(commitAttempts, 1);
+  assert.equal(fallbackPreparations, 0);
 });
