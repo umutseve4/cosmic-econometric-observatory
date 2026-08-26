@@ -8,14 +8,18 @@
 <body>
 <pre id="result">RUNNING</pre>
 <div id="target"></div>
+<div id="fallback-target"></div>
 <script type="module">
 import * as THREE from 'three';
+import { createBrowserDomPort } from '../dist/src/browser-dom-adapter.js';
+import { renderThreeWithFallback } from '../dist/src/browser-fallback-orchestrator.js';
 import { project } from '../dist/src/projections.js';
 import { renderProjection } from '../dist/src/browser-renderer.js';
 import { createBrowserThreePort } from '../dist/src/browser-three-adapter.js';
 
 const result = document.querySelector('#result');
 const target = document.querySelector('#target');
+const fallbackTarget = document.querySelector('#fallback-target');
 const assert = (condition, message) => { if (!condition) throw new Error(message); };
 const scene = {
   schemaVersion: '0.1.0', layoutVersion: 'm3f-real-browser', seed: 'm3f-real-browser',
@@ -57,6 +61,22 @@ try {
   }
   assert(rejected, 'forced WebGL failure was not rejected');
   assert(failedMounts === 0, 'failed WebGL preparation reached target');
+
+  const html = project(scene, 'html');
+  let fallbackMounts = 0;
+  const fallbackReceipt = renderThreeWithFallback(manifest, html, {
+    replaceChildren(...nodes) { fallbackMounts += 1; fallbackTarget.replaceChildren(...nodes); }
+  }, { dom: createBrowserDomPort(document), three: createBrowserThreePort(document, failingRuntime) });
+  assert(fallbackReceipt.outcome === 'fallback', 'fallback outcome');
+  assert(fallbackReceipt.primaryFailure === 'BROWSER_RENDER_INVALID_CONTENT:three:prepare-failed', 'fallback reason');
+  assert(fallbackMounts === 1, 'fallback target commit count');
+  assert(fallbackTarget.querySelector('canvas') === null, 'failed Three canvas mounted');
+  assert(fallbackTarget.querySelectorAll('article[data-node-id]').length === 2, 'fallback node count');
+  assert(fallbackTarget.querySelectorAll('li[data-edge-id]').length === 1, 'fallback edge count');
+  assert(fallbackTarget.querySelectorAll('nav a[data-node-id]').length === 2, 'fallback focus traversal');
+  assert(JSON.stringify(fallbackReceipt.render.nodeIds) === JSON.stringify(manifest.nodeIds), 'fallback node parity');
+  assert(JSON.stringify(fallbackReceipt.render.edgeIds) === JSON.stringify(manifest.edgeIds), 'fallback edge parity');
+  assert(JSON.stringify(fallbackReceipt.render.focusOrderNodeIds) === JSON.stringify(manifest.focusOrderNodeIds), 'fallback focus parity');
   result.textContent = 'M3F_BROWSER_SMOKE_PASS';
 } catch (error) {
   result.textContent = `M3F_BROWSER_SMOKE_FAIL:${error instanceof Error ? error.message : String(error)}`;
