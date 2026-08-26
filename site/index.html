@@ -44,10 +44,11 @@
       const report = (message) => {
         if (result.textContent === 'RUNNING') result.textContent = `M3G_SITE_SMOKE_FAIL:MODULE:${message}`;
       };
+      window.__reportM3gModuleFailure = report;
       window.addEventListener('error', (event) => report(event.message || 'script-error'));
       window.addEventListener('unhandledrejection', (event) => report(event.reason instanceof Error ? event.reason.message : String(event.reason)));
     })();
   </script>
-  <script type="module" src="./app.js"></script>
+  <script type="module" src="./app.js" onerror="window.__reportM3gModuleFailure('load-error')"></script>
 </body>
 </html>
