@@ -14,7 +14,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        phase: [typecheck, tests, artifact, browser-m3d-dom, browser-m3f-three, browser-m3g-artifact]
+        include:
+          - phase: typecheck
+          - phase: tests
+          - phase: artifact
+          - phase: browser-m3d-dom
+            browser_case: m3d-dom
+          - phase: browser-m3f-three
+            browser_case: m3f-three
+          - phase: browser-m3g-artifact
+            browser_case: m3g-artifact
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
@@ -28,5 +37,5 @@ jobs:
         run: npm test
       - if: matrix.phase == 'artifact'
         run: npm run verify:site
-      - if: startsWith(matrix.phase, 'browser-')
-        run: npm run verify:site && BROWSER_SMOKE_CASE="${{ replace(matrix.phase, 'browser-', '') }}" npm run test:browser-smoke
+      - if: matrix.browser_case != ''
+        run: npm run verify:site && BROWSER_SMOKE_CASE="${{ matrix.browser_case }}" npm run test:browser-smoke
