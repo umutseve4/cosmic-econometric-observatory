@@ -44,6 +44,11 @@ for (const [sourceRelative, destinationRelative] of copies) {
   copyFileSync(source, destination);
 }
 
+// The site imports browser-dom-adapter.js directly. Compose the already-tested
+// source validator into that deployed boundary while preserving the immutable
+// 12-payload-file artifact contract and avoiding a second runtime module.
+composeSafeDomAdapter();
+
 const files = [...copies.values()].sort(compareCodePoints).map((path) => {
   const bytes = readFileSync(resolve(output, path));
   return Object.freeze({ path, bytes: bytes.byteLength, sha256: sha256(bytes) });
@@ -57,6 +62,27 @@ const manifest = {
 };
 writeFileSync(resolve(output, 'artifact-manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' });
 console.log(JSON.stringify({ output: relative(root, output), sourceSha: head, manifestSha256: sha256(readFileSync(resolve(output, 'artifact-manifest.json'))), files: files.length }));
+
+function composeSafeDomAdapter() {
+  const destination = resolve(output, 'modules/browser-dom-adapter.js');
+  const adapter = readFileSync(destination, 'utf8');
+  const validatorSource = readFileSync(resolve(root, 'dist/src/browser-dom-source-validator.js'), 'utf8');
+  const prepareSignature = 'function prepare(document, content, kind) {';
+  if (adapter.split(prepareSignature).length !== 2) throw new Error('SITE_BUILD_DOM_ADAPTER_SHAPE_DRIFT');
+  if (!validatorSource.includes('export function validateSourceAttributes(content, kind)')) throw new Error('SITE_BUILD_SOURCE_VALIDATOR_SHAPE_DRIFT');
+
+  const validator = validatorSource
+    .replaceAll('fail(', 'sourceAttributeFail(')
+    .replace('function sourceAttributeFail(kind)', 'function sourceAttributeFail(kind)')
+    .replace('export function validateSourceAttributes(content, kind)', 'function validateSourceAttributes(content, kind)');
+  if (validator.includes('export function validateSourceAttributes')) throw new Error('SITE_BUILD_SOURCE_VALIDATOR_EXPORT_DRIFT');
+
+  const safeAdapter = adapter.replace(
+    prepareSignature,
+    `${prepareSignature}\n    validateSourceAttributes(content, kind);`
+  );
+  writeFileSync(destination, `${safeAdapter.trimEnd()}\n\n${validator.trim()}\n`, 'utf8');
+}
 
 function git(args) {
   return execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
