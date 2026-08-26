@@ -11,7 +11,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "npm run build && node --test dist/tests/*.test.js tests/*.test.mjs",
     "test:browser-smoke": "node scripts/run-real-browser-smoke.mjs",
-    "verify:site": "npm run build:site && node scripts/verify-site.mjs",
+    "test:site-negative": "node scripts/test-site-negative.mjs",
+    "verify:site": "npm run build:site && npm run test:site-negative && node scripts/verify-site.mjs",
     "verify": "npm run typecheck && npm test && npm run verify:site"
   },
   "dependencies": { "three": "0.185.1" },
