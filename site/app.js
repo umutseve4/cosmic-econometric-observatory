@@ -84,7 +84,7 @@ function runM3iSmoke({ htmlTarget, visualTarget, visualReceipt, controller, comm
     expectRejectedWithoutCommit(root, () => second.setAttribute('data-node-id', 'node:tampered'), () => second.setAttribute('data-node-id', originalId), `${label}:id`);
   };
   exerciseSurface(htmlTarget, 'nav a[data-node-id]', 'html', (target) => { const restore = capturePosition(target); const nav = target.closest('nav'); const parent = nav?.parentNode; if (!nav || !parent) throw new Error('missing HTML nav'); return { mutate: () => parent.insertBefore(target, nav), restore }; });
-  if (visualReceipt.outcome === 'fallback') exerciseSurface(visualTarget, 'svg g[role="listitem"][data-node-id]', 'svg', (target) => ({ mutate: () => target.removeAttribute('role'), restore: () => target.setAttribute('role', 'listitem') }));
+  if (visualReceipt.outcome === 'fallback') exerciseSurface(visualTarget, 'svg g[role="listitem"][data-node-id]', 'svg', (target) => ({ mutate: () => target.setAttribute('role', 'presentation'), restore: () => target.setAttribute('role', 'listitem') }));
 
   firstHtmlTarget.focus(); if (document.activeElement !== firstHtmlTarget) throw new Error('HTML focus target');
   firstHtmlTarget.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
