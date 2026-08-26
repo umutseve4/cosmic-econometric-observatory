@@ -40,17 +40,18 @@ export type NodeSelectionProjection = 'html' | 'svg';
 export interface NodeSelectionBinding {
   preflight(state: NodeSelectionState): void;
   capture(): () => void;
-  apply(state: NodeSelectionState): void;
+  /** Mutation-only phase. Call only after every binding was preflighted and captured. */
+  mutate(state: NodeSelectionState): void;
   dispose(): void;
 }
 
-/** Captures every surface before mutation, then restores exact pre-transaction
- * attributes in reverse order if any surface fails. */
+/** Strict phases: every preflight, then every exact capture, then mutations.
+ * No validation or capture runs after the first mutation starts. */
 export function applyNodeSelectionTransition(bindings: readonly NodeSelectionBinding[], transition: NodeSelectionTransition): void {
   for (const binding of bindings) binding.preflight(transition.current);
   const restorers = bindings.map((binding) => binding.capture());
   try {
-    for (const binding of bindings) binding.apply(transition.current);
+    for (const binding of bindings) binding.mutate(transition.current);
   } catch (error) {
     const rollbackErrors: unknown[] = [];
     for (const restore of restorers.reverse()) {
@@ -107,16 +108,9 @@ export function bindNodeSelectionSurface(input: Readonly<{
       if (errors.length > 0) throw new AggregateError(errors, 'NODE_SELECTION_SURFACE_RESTORE_FAILED');
     };
   };
-  const apply = (state: NodeSelectionState): void => {
-    preflight(state);
-    const restore = capture();
-    try {
-      for (const target of paintTargets) setOptionalAttribute(target, 'data-selected', paintTargetIds.get(target) === state.selectedNodeId ? 'true' : null);
-      for (const target of activationTargets) setOptionalAttribute(target, 'aria-current', targetIds.get(target) === state.selectedNodeId ? 'true' : null);
-    } catch (error) {
-      try { restore(); } catch (rollbackError) { throw new AggregateError([error, rollbackError], 'NODE_SELECTION_SURFACE_ROLLBACK_FAILED'); }
-      throw error;
-    }
+  const mutate = (state: NodeSelectionState): void => {
+    for (const target of paintTargets) setOptionalAttribute(target, 'data-selected', paintTargetIds.get(target) === state.selectedNodeId ? 'true' : null);
+    for (const target of activationTargets) setOptionalAttribute(target, 'aria-current', targetIds.get(target) === state.selectedNodeId ? 'true' : null);
   };
   const onKeyDown = (rawEvent: Event): void => {
     if (disposed || !(rawEvent instanceof KeyboardEvent) || rawEvent.repeat) return;
@@ -130,13 +124,14 @@ export function bindNodeSelectionSurface(input: Readonly<{
     input.dispatch(Object.freeze({ type: 'select', nodeId, expectedSnapshotId: snapshotId }));
   };
 
-  apply(input.initialState);
-  input.root.addEventListener('keydown', onKeyDown);
-  return Object.freeze({ preflight, capture, apply, dispose(): void {
+  const binding: NodeSelectionBinding = Object.freeze({ preflight, capture, mutate, dispose(): void {
     if (disposed) return;
     input.root.removeEventListener('keydown', onKeyDown);
     disposed = true;
   } });
+  applyNodeSelectionTransition([binding], Object.freeze({ previous: input.initialState, current: input.initialState }));
+  input.root.addEventListener('keydown', onKeyDown);
+  return binding;
 }
 
 function validateSnapshotId(value: string): string { if (typeof value !== 'string' || value.length === 0) throw new Error('NODE_SELECTION_INVALID_SNAPSHOT_ID'); return value; }

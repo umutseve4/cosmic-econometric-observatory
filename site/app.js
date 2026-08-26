@@ -35,21 +35,18 @@ try {
   const threePort = forceFallback ? Object.freeze({ prepareThree() { throw new Error('M3I_FORCED_THREE_PREPARATION_FAILURE'); } }) : createBrowserThreePort(document, THREE);
   const visualReceipt = renderThreeWithFallback(project(scene, 'three'), project(scene, 'svg'), visualTarget, { dom, three: threePort });
   if (forceFallback && (visualReceipt.outcome !== 'fallback' || visualReceipt.fallbackProjection !== 'svg' || visualReceipt.primaryFailure !== 'BROWSER_RENDER_INVALID_CONTENT:three:prepare-failed' || visualReceipt.render.projection !== 'svg')) throw new Error('forced fallback provenance');
-  if (selectionSmoke && !forceFallback && visualReceipt.outcome !== 'three') throw new Error('selection Three outcome');
-  const canvas = visualTarget.querySelector('canvas');
-  const svg = visualTarget.querySelector('svg');
+  if (selectionSmoke && !forceFallback && (visualReceipt.outcome !== 'three' || visualReceipt.fallbackProjection !== null || visualReceipt.primaryFailure !== null || visualReceipt.render.projection !== 'three')) throw new Error('selection Three provenance');
+  const canvas = visualTarget.querySelector('canvas'); const svg = visualTarget.querySelector('svg');
   const visualReady = visualReceipt.outcome === 'three' ? canvas?.dataset.frame === 'rendered' : svg !== null;
   if (htmlReceipt.nodeIds.length !== 5 || htmlReceipt.edgeIds.length !== 4 || visualReceipt.render.nodeIds.length !== 5 || visualReceipt.render.edgeIds.length !== 4 || !visualReady) throw new Error('artifact semantic parity');
   visualTarget.dataset.renderMode = visualReceipt.outcome;
   if (selectionSmoke) runInvalidBindingPreflightSmoke(htmlTarget, htmlReceipt, scene.inputHash);
 
-  const bindings = [];
-  let logicalCommits = 0;
+  const bindings = []; let logicalCommits = 0;
   const controller = createNodeSelectionController({ snapshotId: scene.inputHash, nodeIds: htmlReceipt.focusOrderNodeIds, commit(transition) { applyNodeSelectionTransition(bindings, transition); logicalCommits += 1; } });
   bindings.push(bindNodeSelectionSurface({ root: htmlTarget, projection: 'html', snapshotId: scene.inputHash, focusOrderNodeIds: htmlReceipt.focusOrderNodeIds, dispatch: (command) => controller.dispatch(command), initialState: controller.getState() }));
-  if (visualReceipt.outcome === 'fallback') {
-    bindings.push(bindNodeSelectionSurface({ root: visualTarget, projection: 'svg', snapshotId: scene.inputHash, focusOrderNodeIds: visualReceipt.render.focusOrderNodeIds, dispatch: (command) => controller.dispatch(command), initialState: controller.getState() }));
-  } else if (canvas?.getAttribute('aria-hidden') !== 'true') throw new Error('three canvas accessibility boundary');
+  if (visualReceipt.outcome === 'fallback') bindings.push(bindNodeSelectionSurface({ root: visualTarget, projection: 'svg', snapshotId: scene.inputHash, focusOrderNodeIds: visualReceipt.render.focusOrderNodeIds, dispatch: (command) => controller.dispatch(command), initialState: controller.getState() }));
+  else if (canvas?.getAttribute('aria-hidden') !== 'true') throw new Error('three canvas accessibility boundary');
 
   if (selectionSmoke) { runM3iSmoke({ htmlTarget, visualTarget, visualReceipt, controller, commitCount: () => logicalCommits }); result.textContent = 'M3I_SITE_SMOKE_PASS'; }
   else result.textContent = 'M3G_SITE_SMOKE_PASS';
@@ -70,34 +67,51 @@ function runInvalidBindingPreflightSmoke(htmlTarget, htmlReceipt, snapshotId) {
 }
 
 function runM3iSmoke({ htmlTarget, visualTarget, visualReceipt, controller, commitCount }) {
-  const firstHtmlTarget = htmlTarget.querySelector('nav a[data-node-id]');
-  const expectedNodeId = firstHtmlTarget?.getAttribute('data-node-id');
-  if (!firstHtmlTarget || !expectedNodeId) throw new Error('missing HTML selection target');
-  const tamperedTarget = visualReceipt.outcome === 'fallback' ? visualTarget.querySelectorAll('svg g[role="listitem"][data-node-id]')[1] : htmlTarget.querySelectorAll('nav a[data-node-id]')[1];
-  if (!tamperedTarget) throw new Error('missing transaction target');
-  const originalTamperedId = tamperedTarget.getAttribute('data-node-id'); tamperedTarget.setAttribute('data-node-id', 'node:tampered');
-  let transactionRejected = false;
-  try { controller.dispatch({ type: 'select', nodeId: expectedNodeId, expectedSnapshotId: scene.inputHash }); }
-  catch (error) { transactionRejected = error instanceof Error && error.message === 'NODE_SELECTION_STALE_TARGET_ID'; }
-  if (originalTamperedId === null) throw new Error('missing original target ID');
-  tamperedTarget.setAttribute('data-node-id', originalTamperedId);
-  if (!transactionRejected || controller.getState().selectedNodeId !== null || commitCount() !== 0 || htmlTarget.querySelector('[data-selected]') || visualTarget.querySelector('[data-selected]')) throw new Error('transactional preflight');
+  const htmlTargets = [...htmlTarget.querySelectorAll('nav a[data-node-id]')]; const firstHtmlTarget = htmlTargets[0]; const secondHtmlTarget = htmlTargets[1];
+  const expectedNodeId = firstHtmlTarget?.getAttribute('data-node-id'); const alternateNodeId = secondHtmlTarget?.getAttribute('data-node-id');
+  if (!firstHtmlTarget || !secondHtmlTarget || !expectedNodeId || !alternateNodeId) throw new Error('missing HTML selection targets');
+  const expectRejectedWithoutCommit = (mutate, restore, label) => {
+    mutate(); let rejected = false;
+    try { controller.dispatch({ type: 'select', nodeId: alternateNodeId, expectedSnapshotId: scene.inputHash }); }
+    catch (error) { rejected = error instanceof Error && (error.message === 'NODE_SELECTION_TARGET_SET_CHANGED' || error.message === 'NODE_SELECTION_STALE_TARGET_ID'); }
+    restore();
+    if (!rejected || controller.getState().selectedNodeId !== null || commitCount() !== 0 || htmlTarget.querySelector('[data-selected]') || visualTarget.querySelector('[data-selected]')) throw new Error(`dynamic target gate:${label}`);
+  };
+  const list = firstHtmlTarget.parentElement; if (!list) throw new Error('missing HTML list');
+  const clone = firstHtmlTarget.cloneNode(true);
+  expectRejectedWithoutCommit(() => list.append(clone), () => clone.remove(), 'insert');
+  const secondNext = secondHtmlTarget.nextSibling;
+  expectRejectedWithoutCommit(() => secondHtmlTarget.remove(), () => list.insertBefore(secondHtmlTarget, secondNext), 'remove');
+  const firstNext = firstHtmlTarget.nextSibling;
+  expectRejectedWithoutCommit(() => list.append(firstHtmlTarget), () => list.insertBefore(firstHtmlTarget, firstNext), 'reorder');
+  const nav = firstHtmlTarget.closest('nav'); const navParent = nav?.parentElement; const navNext = nav?.nextSibling;
+  if (!nav || !navParent) throw new Error('missing HTML nav');
+  expectRejectedWithoutCommit(() => navParent.insertBefore(firstHtmlTarget, nav), () => list.insertBefore(firstHtmlTarget, firstNext), 'selector-membership');
+  const originalId = secondHtmlTarget.getAttribute('data-node-id');
+  expectRejectedWithoutCommit(() => secondHtmlTarget.setAttribute('data-node-id', 'node:tampered'), () => secondHtmlTarget.setAttribute('data-node-id', originalId), 'id');
+  if (visualReceipt.outcome === 'fallback') {
+    const svgTarget = visualTarget.querySelector('svg g[role="listitem"][data-node-id]'); if (!svgTarget) throw new Error('missing SVG membership target');
+    expectRejectedWithoutCommit(() => svgTarget.removeAttribute('role'), () => svgTarget.setAttribute('role', 'listitem'), 'svg-membership');
+  }
 
   firstHtmlTarget.focus(); if (document.activeElement !== firstHtmlTarget) throw new Error('HTML focus target');
   firstHtmlTarget.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
   if (controller.getState().selectedNodeId !== expectedNodeId || commitCount() !== 1 || firstHtmlTarget.getAttribute('aria-current') !== 'true') throw new Error('HTML Enter selection');
 
   if (visualReceipt.outcome === 'fallback') {
-    const secondSvgTarget = visualTarget.querySelectorAll('svg g[role="listitem"][data-node-id]')[1];
+    const svgTargets = [...visualTarget.querySelectorAll('svg g[role="listitem"][data-node-id]')]; const firstSvgTarget = svgTargets[0]; const secondSvgTarget = svgTargets[1];
     const secondNodeId = secondSvgTarget?.getAttribute('data-node-id');
-    if (!secondSvgTarget || !secondNodeId) throw new Error('missing SVG rollback target');
+    if (!firstSvgTarget || !secondSvgTarget || !secondNodeId) throw new Error('missing SVG rollback targets');
+    secondHtmlTarget.setAttribute('data-selected', 'legacy-html-selected'); secondHtmlTarget.setAttribute('aria-current', 'legacy-html-current');
+    secondSvgTarget.setAttribute('data-selected', 'legacy-svg-selected'); secondSvgTarget.setAttribute('aria-current', 'legacy-svg-current');
     const originalSetAttribute = secondSvgTarget.setAttribute.bind(secondSvgTarget); let injected = false;
     secondSvgTarget.setAttribute = (name, value) => { if (!injected && name === 'data-selected') { injected = true; throw new Error('M3I_INJECTED_SVG_APPLY_FAILURE'); } originalSetAttribute(name, value); };
     let applyRejected = false;
     try { controller.dispatch({ type: 'select', nodeId: secondNodeId, expectedSnapshotId: scene.inputHash }); }
     catch (error) { applyRejected = error instanceof Error && error.message === 'M3I_INJECTED_SVG_APPLY_FAILURE'; }
     secondSvgTarget.setAttribute = originalSetAttribute;
-    if (!applyRejected || controller.getState().selectedNodeId !== expectedNodeId || commitCount() !== 1 || firstHtmlTarget.getAttribute('aria-current') !== 'true' || visualTarget.querySelector('svg g[aria-current="true"]')?.getAttribute('data-node-id') !== expectedNodeId) throw new Error('cross-surface exact rollback');
+    if (!applyRejected || controller.getState().selectedNodeId !== expectedNodeId || commitCount() !== 1 || firstHtmlTarget.getAttribute('aria-current') !== 'true' || firstSvgTarget.getAttribute('aria-current') !== 'true' || secondHtmlTarget.getAttribute('data-selected') !== 'legacy-html-selected' || secondHtmlTarget.getAttribute('aria-current') !== 'legacy-html-current' || secondSvgTarget.getAttribute('data-selected') !== 'legacy-svg-selected' || secondSvgTarget.getAttribute('aria-current') !== 'legacy-svg-current') throw new Error('cross-surface exact rollback');
+    secondHtmlTarget.removeAttribute('data-selected'); secondHtmlTarget.removeAttribute('aria-current'); secondSvgTarget.removeAttribute('data-selected'); secondSvgTarget.removeAttribute('aria-current');
   }
 
   firstHtmlTarget.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true, repeat: true }));
@@ -107,7 +121,6 @@ function runM3iSmoke({ htmlTarget, visualTarget, visualReceipt, controller, comm
   if (commitCount() !== 1) throw new Error('forged target committed');
   htmlTarget.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
   if (controller.getState().selectedNodeId !== null || commitCount() !== 2) throw new Error('HTML Escape clear');
-
   if (visualReceipt.outcome === 'fallback') {
     const firstSvgTarget = visualTarget.querySelector('svg g[role="listitem"][data-node-id]');
     if (!firstSvgTarget || firstSvgTarget.getAttribute('data-node-id') !== expectedNodeId) throw new Error('SVG focus parity');
