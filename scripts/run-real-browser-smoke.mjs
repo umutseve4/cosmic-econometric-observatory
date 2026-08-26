@@ -6,6 +6,7 @@ import { closeServerBounded, usesDetachedProcessGroup, waitForBrowserExit } from
 
 const root = resolve(process.cwd());
 const chrome = process.env.CHROME_BIN || 'google-chrome';
+const diagnosticExpectedPrefix = process.env.BROWSER_DIAGNOSTIC_EXPECT_PREFIX;
 const contentTypes = new Map([
   ['.html', 'text/html; charset=utf-8'],
   ['.js', 'text/javascript; charset=utf-8'],
@@ -21,6 +22,7 @@ const allCases = [
 const selectedCase = process.env.BROWSER_SMOKE_CASE;
 const cases = selectedCase === undefined ? allCases : allCases.filter((testCase) => testCase.id === selectedCase);
 if (cases.length === 0) throw new Error(`unknown BROWSER_SMOKE_CASE: ${String(selectedCase)}`);
+if (diagnosticExpectedPrefix !== undefined && (selectedCase === undefined || cases.length !== 1)) throw new Error('browser diagnostic expectation requires one selected case');
 
 const server = createServer((request, response) => {
   const pathname = new URL(request.url ?? '/', 'http://127.0.0.1').pathname;
@@ -62,6 +64,11 @@ async function runCase(testCase, port) {
   const resultMatch = stdout.match(/<pre\b[^>]*\bid="result"[^>]*>([\s\S]*?)<\/pre>/u);
   if (resultMatch === null) throw new Error(`browser page did not serialize #result for ${testCase.page}\n${stdout}\n${stderr}`);
   const resultText = resultMatch[1]?.trim() ?? '';
+  if (diagnosticExpectedPrefix !== undefined) {
+    if (!resultText.startsWith(diagnosticExpectedPrefix)) throw new Error(`diagnostic prefix did not match for ${testCase.page}: ${resultText}`);
+    console.log(`BROWSER_DIAGNOSTIC_MATCH:${diagnosticExpectedPrefix}`);
+    return;
+  }
   if (resultText.startsWith(testCase.fail)) throw new Error(`browser page reported failure for ${testCase.page}\n${resultText}`);
   if (resultText !== testCase.pass) throw new Error(`browser page reported unexpected result for ${testCase.page}: ${resultText}`);
   console.log(testCase.pass);

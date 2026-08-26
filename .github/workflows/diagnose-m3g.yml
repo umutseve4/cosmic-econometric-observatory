@@ -24,6 +24,12 @@ jobs:
             browser_case: m3f-three
           - phase: browser-m3g-artifact
             browser_case: m3g-artifact
+          - phase: browser-m3g-result-fail
+            browser_case: m3g-artifact
+            expected_prefix: 'M3G_SITE_SMOKE_FAIL:'
+          - phase: browser-m3g-result-running
+            browser_case: m3g-artifact
+            expected_prefix: 'RUNNING'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
@@ -37,5 +43,7 @@ jobs:
         run: npm test
       - if: matrix.phase == 'artifact'
         run: npm run verify:site
-      - if: matrix.browser_case != ''
+      - if: matrix.browser_case != '' && matrix.expected_prefix == ''
         run: npm run verify:site && BROWSER_SMOKE_CASE="${{ matrix.browser_case }}" npm run test:browser-smoke
+      - if: matrix.expected_prefix != ''
+        run: npm run verify:site && BROWSER_SMOKE_CASE="${{ matrix.browser_case }}" BROWSER_DIAGNOSTIC_EXPECT_PREFIX="${{ matrix.expected_prefix }}" npm run test:browser-smoke
