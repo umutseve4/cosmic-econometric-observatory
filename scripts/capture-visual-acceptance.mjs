@@ -187,7 +187,7 @@ async function captureCase(testCase, port, httpOrigin, browserVersion) {
     const fullPath = resolve(output, fullFile);
     writeFileSync(fullPath, fullPng, { flag: 'wx' });
     const fullDimensions = pngDimensions(fullPng);
-    if (fullDimensions.width !== testCase.width || fullDimensions.height < testCase.height) throw new Error(`VISUAL_EVIDENCE_FULL_SIZE:${testCase.id}:${fullDimensions.width}x${fullDimensions.height}`);
+    if (fullDimensions.width !== contentWidth || fullDimensions.width > testCase.width || fullDimensions.height < testCase.height) throw new Error(`VISUAL_EVIDENCE_FULL_SIZE:${testCase.id}:${fullDimensions.width}x${fullDimensions.height}`);
 
     return Object.freeze({
       id: testCase.id, sourceSha, route: `/index.html${testCase.query}`, finalUrl: observed.finalUrl, httpStatus: preflight.status, requestedMode: testCase.requestedMode,
