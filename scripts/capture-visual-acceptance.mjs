@@ -73,16 +73,21 @@ async function launchBrowser(profileDirectory) {
   ], { stdio: ['ignore', 'ignore', 'pipe'] });
   child.stderr.setEncoding('utf8');
   let stderr = '';
-  return await new Promise((resolveLaunch, rejectLaunch) => {
-    const timeout = setTimeout(() => rejectLaunch(new Error(`VISUAL_EVIDENCE_BROWSER_TIMEOUT\n${stderr}`)), 20_000);
-    child.once('error', (error) => { clearTimeout(timeout); rejectLaunch(error); });
-    child.stderr.on('data', (chunk) => {
-      stderr += chunk;
-      const match = stderr.match(/DevTools listening on ws:\/\/(127\.0\.0\.1|localhost):(\d+)\//u);
-      if (match !== null) { clearTimeout(timeout); resolveLaunch({ child, httpOrigin: `http://127.0.0.1:${match[2]}` }); }
+  try {
+    return await new Promise((resolveLaunch, rejectLaunch) => {
+      const timeout = setTimeout(() => rejectLaunch(new Error(`VISUAL_EVIDENCE_BROWSER_TIMEOUT\n${stderr}`)), 20_000);
+      child.once('error', (error) => { clearTimeout(timeout); rejectLaunch(error); });
+      child.stderr.on('data', (chunk) => {
+        stderr += chunk;
+        const match = stderr.match(/DevTools listening on ws:\/\/(127\.0\.0\.1|localhost):(\d+)\//u);
+        if (match !== null) { clearTimeout(timeout); resolveLaunch({ child, httpOrigin: `http://127.0.0.1:${match[2]}` }); }
+      });
+      child.once('close', (code, signal) => { clearTimeout(timeout); rejectLaunch(new Error(`VISUAL_EVIDENCE_BROWSER_EXIT:${String(code)}:${String(signal)}\n${stderr}`)); });
     });
-    child.once('close', (code, signal) => { clearTimeout(timeout); rejectLaunch(new Error(`VISUAL_EVIDENCE_BROWSER_EXIT:${String(code)}:${String(signal)}\n${stderr}`)); });
-  });
+  } catch (error) {
+    await stopBrowser(child);
+    throw error;
+  }
 }
 
 async function getBrowserVersion(httpOrigin) {
@@ -149,11 +154,17 @@ async function captureCase(testCase, port, httpOrigin, browserVersion) {
           viewportFrame: viewport ? { width: viewport.getBoundingClientRect().width, height: viewport.getBoundingClientRect().height } : null,
           heroBottom: hero?.getBoundingClientRect().bottom ?? null,
           semanticTop: semantic?.getBoundingClientRect().top ?? null,
-          fonts: { status: document.fonts.status, readyWithin10s: fontReady, dmSansLoaded: document.fonts.check('16px "DM Sans"'), libreFranklinLoaded: document.fonts.check('16px "Libre Franklin"'), bodyFamily: bodyStyle.fontFamily, titleFamily: titleStyle.fontFamily }
+          fonts: (() => {
+            const requestedFamilies = ['DM Sans', 'Libre Franklin'].map((family) => {
+              const faces = Array.from(document.fonts).filter((face) => face.family.replaceAll('"', '') === family);
+              return { family, faceCount: faces.length, statuses: faces.map((face) => face.status), checkResult: document.fonts.check('16px "' + family + '"') };
+            });
+            return { status: document.fonts.status, readyWithin10s: fontReady, renderState: requestedFamilies.every((item) => item.faceCount > 0 && item.statuses.every((status) => status === 'loaded')) ? 'loaded' : 'fallback', requestedFamilies, bodyFamily: bodyStyle.fontFamily, titleFamily: titleStyle.fontFamily };
+          })()
         };
       })()`
     }, 35_000);
-    if (state.exceptionDetails !== undefined) throw new Error(`VISUAL_EVIDENCE_PAGE_FAILURE:${testCase.id}:${state.exceptionDetails.text ?? 'evaluation'}`);
+    if (state.exceptionDetails !== undefined) throw new Error(`VISUAL_EVIDENCE_PAGE_FAILURE:${testCase.id}:${state.exceptionDetails.exception?.description ?? state.exceptionDetails.text ?? 'evaluation'}`);
     const observed = state.result?.value;
     const expectedMode = testCase.requestedMode === 'fallback' ? 'fallback' : 'three';
     if (observed?.finalUrl !== route) throw new Error(`VISUAL_EVIDENCE_FINAL_URL:${testCase.id}:${String(observed?.finalUrl)}`);
@@ -197,7 +208,13 @@ function connectCdp(url) {
     const socket = new WebSocket(url);
     let nextId = 1;
     const pending = new Map();
-    socket.addEventListener('open', () => resolveConnect({
+    const connectionTimeout = setTimeout(() => {
+      socket.close();
+      rejectConnect(new Error('VISUAL_EVIDENCE_CDP_CONNECT_TIMEOUT'));
+    }, 10_000);
+    socket.addEventListener('open', () => {
+      clearTimeout(connectionTimeout);
+      resolveConnect({
       call(method, params = {}, timeoutMs = 15_000) {
         const id = nextId++;
         socket.send(JSON.stringify({ id, method, params }));
@@ -213,9 +230,13 @@ function connectCdp(url) {
           });
         });
       },
-      close() { socket.close(); }
-    }), { once: true });
-    socket.addEventListener('error', () => rejectConnect(new Error('VISUAL_EVIDENCE_CDP_SOCKET')), { once: true });
+        close() { socket.close(); }
+      });
+    }, { once: true });
+    socket.addEventListener('error', () => {
+      clearTimeout(connectionTimeout);
+      rejectConnect(new Error('VISUAL_EVIDENCE_CDP_SOCKET'));
+    }, { once: true });
     socket.addEventListener('message', (event) => {
       const message = JSON.parse(String(event.data));
       if (!Number.isInteger(message.id) || !pending.has(message.id)) return;
@@ -241,7 +262,13 @@ function pngDimensions(bytes) {
 }
 function sha256(value) { return createHash('sha256').update(value).digest('hex'); }
 function listen(value) { return new Promise((resolveListen, rejectListen) => { value.once('error', rejectListen); value.listen(0, '127.0.0.1', resolveListen); }); }
-function closeServer(value) { return new Promise((resolveClose) => value.close(resolveClose)); }
+function closeServer(value) {
+  if (!value.listening) return Promise.resolve();
+  return new Promise((resolveClose) => {
+    const timeout = setTimeout(() => { value.closeAllConnections(); resolveClose(); }, 2000);
+    value.close(() => { clearTimeout(timeout); resolveClose(); });
+  });
+}
 async function stopBrowser(child) {
   if (child.exitCode !== null || child.signalCode !== null) return;
   child.kill('SIGTERM');

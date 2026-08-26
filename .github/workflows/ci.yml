@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 jobs:
   verify:
@@ -45,15 +46,31 @@ jobs:
       - name: Run real-browser smoke suite
         run: npm run test:browser-smoke
       - name: Capture four-state visual acceptance evidence
-        run: npm run capture:visual-acceptance
-      - name: Upload immutable visual acceptance evidence
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run capture:visual-acceptance 2>&1 | tee visual-capture.log
+      - name: Preserve visual evidence and diagnostics
+        if: ${{ always() }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: cosmic-visual-acceptance-${{ env.SOURCE_SHA }}
-          path: visual-acceptance-evidence/
-          if-no-files-found: error
+          path: |
+            visual-acceptance-evidence/
+            visual-capture.log
+          if-no-files-found: warn
           compression-level: 0
           retention-days: 30
+      - name: Report visual-capture failure on the pull request
+        if: ${{ failure() && github.event_name == 'pull_request' && hashFiles('visual-capture.log') != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        shell: bash
+        run: |
+          tail -c 6000 visual-capture.log > visual-capture-tail.log
+          body=$(printf 'Visual evidence capture failed on exact source `%s` in run `%s`.\n\n```text\n%s\n```' "$SOURCE_SHA" "$GITHUB_RUN_ID" "$(cat visual-capture-tail.log)")
+          gh api "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" --raw-field body="$body"
       - name: Verify production dependency tree
         run: npm ls --omit=dev --depth=0
       - name: Capture artifact digest
