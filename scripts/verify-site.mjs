@@ -37,10 +37,12 @@ function verifyManifest(output) {
   if (manifest.schemaVersion !== '1.0.0' || manifest.sourceSha !== head || !/^[0-9a-f]{64}$/u.test(manifest.lockfileSha256) || !Array.isArray(manifest.files)) throw new Error('SITE_VERIFY_INVALID_MANIFEST');
   const lockHash = sha256(readFileSync(resolve(root, 'package-lock.json')));
   if (manifest.lockfileSha256 !== lockHash) throw new Error('SITE_VERIFY_LOCKFILE_DRIFT');
-  const paths = manifest.files.map(({ path }) => path);
+  for (const entry of manifest.files) {
+    if (entry === null || typeof entry !== 'object' || Array.isArray(entry) || typeof entry.path !== 'string' || !safeRelative(entry.path) || !Number.isSafeInteger(entry.bytes) || entry.bytes < 0 || !/^[0-9a-f]{64}$/u.test(entry.sha256)) throw new Error('SITE_VERIFY_INVALID_ENTRY');
+  }
+  const paths = manifest.files.map((entry) => entry.path);
   if (new Set(paths).size !== paths.length || paths.some((path, index) => index > 0 && compareCodePoints(paths[index - 1], path) >= 0)) throw new Error('SITE_VERIFY_MANIFEST_ORDER');
   for (const entry of manifest.files) {
-    if (!entry || typeof entry.path !== 'string' || !Number.isSafeInteger(entry.bytes) || !/^[0-9a-f]{64}$/u.test(entry.sha256)) throw new Error('SITE_VERIFY_INVALID_ENTRY');
     const file = resolve(output, entry.path);
     if (!file.startsWith(`${output}${sep}`)) throw new Error('SITE_VERIFY_PATH_ESCAPE');
     const info = lstatSync(file);
@@ -60,7 +62,8 @@ function snapshot(output) {
 }
 function listFiles(directory, prefix = '') {
   const result = [];
-  for (const name of readdirSync(directory).sort(compareCodePoints)) {
+  const currentDirectory = prefix === '' ? directory : resolve(directory, prefix);
+  for (const name of readdirSync(currentDirectory).sort(compareCodePoints)) {
     const relativePath = prefix === '' ? name : `${prefix}/${name}`;
     const info = lstatSync(resolve(directory, relativePath));
     if (info.isSymbolicLink()) throw new Error(`SITE_VERIFY_SYMLINK:${relativePath}`);
@@ -69,6 +72,9 @@ function listFiles(directory, prefix = '') {
     else throw new Error(`SITE_VERIFY_UNSUPPORTED_ENTRY:${relativePath}`);
   }
   return result;
+}
+function safeRelative(value) {
+  return value.length > 0 && !value.startsWith('/') && !value.split('/').some((part) => part === '' || part === '.' || part === '..');
 }
 function sha256(value) { return createHash('sha256').update(value).digest('hex'); }
 function compareCodePoints(a, b) {

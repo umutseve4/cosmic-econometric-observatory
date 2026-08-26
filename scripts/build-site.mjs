@@ -1,11 +1,16 @@
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { copyFileSync, lstatSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, relative, resolve, sep } from 'node:path';
+import { dirname, relative, resolve } from 'node:path';
 
 const root = resolve(process.cwd());
 const output = resolve(root, process.env.SITE_OUTPUT_DIR || 'dist-site');
-if (output === root || !output.startsWith(`${root}${sep}`)) throw new Error('SITE_BUILD_INVALID_OUTPUT');
+const allowedOutputs = new Set([
+  resolve(root, 'dist-site'),
+  resolve(root, '.site-verify-a'),
+  resolve(root, '.site-verify-b')
+]);
+if (!allowedOutputs.has(output)) throw new Error('SITE_BUILD_INVALID_OUTPUT');
 
 const head = git(['rev-parse', 'HEAD']);
 if (!/^[0-9a-f]{40}$/u.test(head)) throw new Error('SITE_BUILD_INVALID_SOURCE_SHA');
@@ -32,7 +37,6 @@ for (const [sourceRelative, destinationRelative] of copies) {
   const info = lstatSync(source);
   if (!info.isFile() || info.isSymbolicLink()) throw new Error(`SITE_BUILD_UNSAFE_SOURCE:${sourceRelative}`);
   const destination = resolve(output, destinationRelative);
-  if (!destination.startsWith(`${output}${sep}`)) throw new Error(`SITE_BUILD_PATH_ESCAPE:${destinationRelative}`);
   mkdirSync(dirname(destination), { recursive: true });
   copyFileSync(source, destination);
 }
