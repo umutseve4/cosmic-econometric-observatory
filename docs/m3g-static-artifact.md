@@ -20,9 +20,9 @@ M3g packages the bounded M3f vertical slice as a deterministic, provenance-carry
 ## Closure evidence
 
 - Squash merge: `4f60d58de6f8a758e0241609bdcb988533e24f0f` (`M3g: deterministic deployable static artifact (#23)`).
-- The exact-merge commit checks page identifies `CI on: push`; job `verify` succeeded on Aug 26, 2026 in `32s`.
+- The [exact-merge commit checks page](https://github.com/umutseve4/cosmic-econometric-observatory/commit/4f60d58de6f8a758e0241609bdcb988533e24f0f/checks) identifies `CI on: push`; job `verify` succeeded on Aug 26, 2026 in `32s` and reports one Node.js 20 deprecation warning for the pinned artifact-upload action.
 - The accessible checks view did not expose native run, job, or suite identifiers, the manifest SHA-256 value, or uploaded-artifact runtime metadata. None is inferred here.
-- Fresh independent QA verdict: `PASS-WITH-NOTES`, with CRITICAL/HIGH/MEDIUM/LOW findings `0/0/0/0`. The remaining assurance note is that formal GitHub Advanced Security secret scanning was unavailable.
+- Formal GitHub Advanced Security secret scanning was unavailable; no repository-wide secret-clean conclusion is claimed.
 
 ## Explicit limits
 
