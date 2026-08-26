@@ -82,13 +82,14 @@
         ['Knowledge relations', 'Bilgi ilişkileri'], ['Knowledge nodes', 'Bilgi düğümleri'], ['Relations', 'İlişkiler'],
         ['Bursa Uludağ University', 'Bursa Uludağ Üniversitesi'], ['Econometrics', 'Ekonometri'],
         ['2025–2026 Curriculum', '2025–2026 Müfredatı'], ['Content-addressed snapshot', 'İçerik adresli kaynak görüntüsü'],
-        ['institution', 'kurum'], ['program', 'lisans programı'], ['curriculum', 'müfredat'], ['course', 'ders'], ['source', 'kaynak'],
+        ['institution', 'kurum'], ['curriculum', 'müfredat'], ['course', 'ders'], ['source', 'kaynak'],
         ['inspect', 'incele'], ['navigate', 'gezin'], ['CONTAINS', 'İÇERİR'], ['PUBLISHES', 'YAYIMLAR'], ['INCLUDES', 'KAPSAR'], ['SUPPORTS', 'DESTEKLER']
       ];
       const localizedAttributes = ['aria-label', 'title', 'alt', 'placeholder', 'value', 'aria-description'];
       const translate = (value) => {
         let output = value;
         for (const [from, to] of phrases) output = output.split(from).join(to);
+        output = output.replace(/(^|[^\p{L}\p{N}])program(?=$|[^\p{L}\p{N}])/giu, '$1lisans programı');
         output = output.replace(/(\d+) of (\d+):/g, '$2 öğeden $1.:');
         return output;
       };
