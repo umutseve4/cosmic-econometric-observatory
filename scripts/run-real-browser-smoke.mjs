@@ -16,7 +16,9 @@ const contentTypes = new Map([
 const allCases = [
   { id: 'm3d-dom', serveRoot: repositoryRoot, page: 'tests/real-browser-dom-smoke.html', pass: 'M3D_BROWSER_SMOKE_PASS', fail: 'M3D_BROWSER_SMOKE_FAIL', flags: ['--disable-gpu'] },
   { id: 'm3f-three', serveRoot: repositoryRoot, page: 'tests/real-browser-three-smoke.html', pass: 'M3F_BROWSER_SMOKE_PASS', fail: 'M3F_BROWSER_SMOKE_FAIL', flags: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] },
-  { id: 'm3g-artifact', serveRoot: resolve(repositoryRoot, 'dist-site'), page: 'index.html', pass: 'M3G_SITE_SMOKE_PASS', fail: 'M3G_SITE_SMOKE_FAIL', flags: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] }
+  { id: 'm3g-artifact', serveRoot: resolve(repositoryRoot, 'dist-site'), page: 'index.html', pass: 'M3G_SITE_SMOKE_PASS', fail: 'M3G_SITE_SMOKE_FAIL', flags: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] },
+  { id: 'm3i-selection-three', serveRoot: resolve(repositoryRoot, 'dist-site'), page: 'index.html?smoke=m3i', pass: 'M3I_SITE_SMOKE_PASS', fail: 'M3I_SITE_SMOKE_FAIL', flags: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] },
+  { id: 'm3i-selection-fallback', serveRoot: resolve(repositoryRoot, 'dist-site'), page: 'index.html?smoke=m3i', pass: 'M3I_SITE_SMOKE_PASS', fail: 'M3I_SITE_SMOKE_FAIL', flags: ['--disable-gpu'] }
 ];
 const selectedCase = process.env.BROWSER_SMOKE_CASE;
 const cases = selectedCase === undefined ? allCases : allCases.filter((testCase) => testCase.id === selectedCase);
@@ -27,7 +29,7 @@ const server = createServer((request, response) => {
   const pathname = new URL(request.url ?? '/', 'http://127.0.0.1').pathname;
   let relative;
   try {
-    relative = pathname === '/' ? activeCase.page : decodeURIComponent(pathname.slice(1));
+    relative = pathname === '/' ? activeCase.page.split('?')[0] : decodeURIComponent(pathname.slice(1));
   } catch {
     response.writeHead(400).end('bad request');
     return;
@@ -78,7 +80,7 @@ async function runCase(testCase, port) {
   const resultText = resultMatch[1]?.trim() ?? '';
   if (resultText.startsWith(testCase.fail)) throw new Error(`browser page reported failure for ${testCase.page}\n${resultText}`);
   if (resultText !== testCase.pass) throw new Error(`browser page reported unexpected result for ${testCase.page}: ${resultText}`);
-  console.log(testCase.pass);
+  console.log(`${testCase.id}:${testCase.pass}`);
 }
 
 try {
