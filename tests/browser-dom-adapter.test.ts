@@ -55,7 +55,7 @@ function htmlRoots(): FakeNode[] {
   return [nav, main, section];
 }
 function svgRoots(): FakeNode[] {
-  return [e('svg', S, { role: 'group', 'aria-label': 'Academic knowledge universe', viewbox: '-1 -1 5 5', preserveaspectratio: 'xMidYMid meet' }, [
+  return [e('svg', S, { role: 'group', 'aria-label': 'Academic knowledge universe', viewBox: '-1 -1 5 5', preserveAspectRatio: 'xMidYMid meet' }, [
     e('g', S, { role: 'list', 'aria-label': 'Knowledge nodes' }, [
       e('g', S, { id: 'node:a', role: 'listitem', tabindex: '0', 'data-node-id': 'node:a', 'data-semantic-kind': 'program', 'aria-label': '1 of 2: A (program)' }, [e('circle', S, { cx: '1', cy: '1', r: '1' }), e('title', S, {}, [t('A')])]),
       e('g', S, { id: 'node:b', role: 'listitem', tabindex: '0', 'data-node-id': 'node:b', 'data-semantic-kind': 'course', 'aria-label': '2 of 2: B (course)' }, [e('circle', S, { cx: '2', cy: '2', r: '1' }), e('title', S, {}, [t('B')])])
