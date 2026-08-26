@@ -7,5 +7,6 @@ export * from './browser-renderer.js';
 export * from './browser-fallback-orchestrator.js';
 export * from './browser-dom-adapter.js';
 export * from './browser-three-adapter.js';
+export * from './browser-node-selection.js';
 export * from './buu-snapshot.js';
 export * from './curriculum-compiler.js';

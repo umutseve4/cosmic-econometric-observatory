@@ -73,8 +73,15 @@
 - Node and real Chromium/SwiftShader tests cover success, forced WebGL failure, semantic drift, malformed manifests/content and target collision behavior.
 - Verified at squash merge `38e8314978ef87d7c962c36f6161580d4c6e9f90` with exact-main [`verify` check run `98129078877`](https://api.github.com/repos/umutseve4/cosmic-econometric-observatory/check-runs/98129078877), suite `89262843081`, completed successfully from `2026-08-26T09:28:44Z` to `2026-08-26T09:29:19Z`, and independent exact-head QA PASS with CRITICAL/HIGH/MEDIUM/LOW findings `0/0/0/0`.
 
+### M3i — Deterministic keyboard node selection (in progress)
+- Keep selection identity as a persistent node ID owned by one controller shared across semantic projections.
+- Accept `Enter` and `Space` selection plus `Escape` clear; repeated, unknown, duplicate and stale inputs produce exactly `0` logical commits, while a real state transition produces exactly `1`.
+- Bind only validated HTML navigation and SVG fallback targets; keep the Three canvas decorative and `aria-hidden="true"`.
+- Require Node adversarial coverage and real Chromium evidence for SwiftShader Three and forced-no-WebGL SVG fallback paths before verification closure.
+- This slice does not claim camera controls, pointer picking, continuous rendering, cross-browser or assistive-technology conformance, deployment, or production readiness.
+
 ### Deferred M3 slices
-- Continuous rendering, camera/selection interaction, responsive application shell, cross-browser and assistive-technology validation, production-scale performance, disposal-throw resilience, and deployment remain deferred.
+- Continuous rendering, camera and pointer interaction, responsive application shell, cross-browser and assistive-technology validation, production-scale performance, disposal-throw resilience, and deployment remain deferred.
 
 ### M3 exit
 - WebGL/Three.js renderer, SVG/HTML parity and screen-reader traversal.
