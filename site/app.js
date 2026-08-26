@@ -3,7 +3,7 @@ import { createBrowserDomPort } from './modules/browser-dom-adapter.js';
 import { renderProjection } from './modules/browser-renderer.js';
 import { renderThreeWithFallback } from './modules/browser-fallback-orchestrator.js';
 import { createBrowserThreePort } from './modules/browser-three-adapter.js';
-import { bindNodeSelectionSurface, createNodeSelectionController } from './modules/browser-node-selection.js';
+import { applyNodeSelectionTransition, bindNodeSelectionSurface, createNodeSelectionController } from './modules/browser-node-selection.js';
 import { project } from './modules/projections.js';
 
 const scene = {
@@ -25,29 +25,30 @@ const scene = {
 
 const result = document.querySelector('#result');
 try {
+  const query = new URLSearchParams(location.search);
+  const selectionSmoke = query.get('smoke') === 'm3i';
+  const forceFallback = query.get('force-fallback') === 'true';
   const dom = createBrowserDomPort(document);
   const htmlTarget = document.querySelector('#html-universe');
   const visualTarget = document.querySelector('#webgl-universe');
   const htmlReceipt = renderProjection(project(scene, 'html'), htmlTarget, { dom });
-  const visualReceipt = renderThreeWithFallback(
-    project(scene, 'three'), project(scene, 'svg'), visualTarget,
-    { dom, three: createBrowserThreePort(document, THREE) }
-  );
+  const threePort = forceFallback
+    ? Object.freeze({ prepareThree() { throw new Error('M3I_FORCED_THREE_PREPARATION_FAILURE'); } })
+    : createBrowserThreePort(document, THREE);
+  const visualReceipt = renderThreeWithFallback(project(scene, 'three'), project(scene, 'svg'), visualTarget, { dom, three: threePort });
+  if (forceFallback && visualReceipt.outcome !== 'fallback') throw new Error('forced fallback did not occur');
   const canvas = visualTarget.querySelector('canvas');
   const svg = visualTarget.querySelector('svg');
   const visualReady = visualReceipt.outcome === 'three' ? canvas?.dataset.frame === 'rendered' : svg !== null;
   if (htmlReceipt.nodeIds.length !== 5 || htmlReceipt.edgeIds.length !== 4 || visualReceipt.render.nodeIds.length !== 5 || visualReceipt.render.edgeIds.length !== 4 || !visualReady) throw new Error('artifact semantic parity');
   visualTarget.dataset.renderMode = visualReceipt.outcome;
+  if (selectionSmoke) runInvalidBindingPreflightSmoke(htmlTarget, htmlReceipt, scene.inputHash);
 
   const bindings = [];
   let logicalCommits = 0;
   const controller = createNodeSelectionController({
-    snapshotId: scene.inputHash,
-    nodeIds: htmlReceipt.focusOrderNodeIds,
-    commit(transition) {
-      for (const binding of bindings) binding.apply(transition.current);
-      logicalCommits += 1;
-    }
+    snapshotId: scene.inputHash, nodeIds: htmlReceipt.focusOrderNodeIds,
+    commit(transition) { applyNodeSelectionTransition(bindings, transition); logicalCommits += 1; }
   });
   bindings.push(bindNodeSelectionSurface({
     root: htmlTarget, projection: 'html', snapshotId: scene.inputHash,
@@ -58,25 +59,52 @@ try {
       root: visualTarget, projection: 'svg', snapshotId: scene.inputHash,
       focusOrderNodeIds: visualReceipt.render.focusOrderNodeIds, dispatch: (command) => controller.dispatch(command), initialState: controller.getState()
     }));
-  } else if (canvas?.getAttribute('aria-hidden') !== 'true') {
-    throw new Error('three canvas accessibility boundary');
-  }
+  } else if (canvas?.getAttribute('aria-hidden') !== 'true') throw new Error('three canvas accessibility boundary');
 
-  if (new URLSearchParams(location.search).get('smoke') === 'm3i') {
+  if (selectionSmoke) {
     runM3iSmoke({ htmlTarget, visualTarget, visualReceipt, controller, commitCount: () => logicalCommits });
     result.textContent = 'M3I_SITE_SMOKE_PASS';
-  } else {
-    result.textContent = 'M3G_SITE_SMOKE_PASS';
-  }
+  } else result.textContent = 'M3G_SITE_SMOKE_PASS';
 } catch (error) {
   const prefix = new URLSearchParams(location.search).get('smoke') === 'm3i' ? 'M3I_SITE_SMOKE_FAIL' : 'M3G_SITE_SMOKE_FAIL';
   result.textContent = `${prefix}:${error instanceof Error ? error.message : String(error)}`;
+}
+
+function runInvalidBindingPreflightSmoke(htmlTarget, htmlReceipt, snapshotId) {
+  const first = htmlTarget.querySelector('nav a[data-node-id]');
+  const list = first?.parentElement;
+  if (!first || !list) throw new Error('missing preflight target');
+  const duplicate = first.cloneNode(true);
+  list.append(duplicate);
+  let dispatches = 0;
+  let rejected = false;
+  try {
+    bindNodeSelectionSurface({ root: htmlTarget, projection: 'html', snapshotId, focusOrderNodeIds: htmlReceipt.focusOrderNodeIds, dispatch() { dispatches += 1; return { outcome: 'noop', state: { selectedNodeId: null }, logicalCommitCount: 0 }; }, initialState: { selectedNodeId: null } });
+  } catch (error) { rejected = error instanceof Error && error.message === 'NODE_SELECTION_DUPLICATE_TARGET'; }
+  duplicate.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  duplicate.remove();
+  if (!rejected || dispatches !== 0 || htmlTarget.querySelector('[data-selected]')) throw new Error('binding preflight mutation');
 }
 
 function runM3iSmoke({ htmlTarget, visualTarget, visualReceipt, controller, commitCount }) {
   const firstHtmlTarget = htmlTarget.querySelector('nav a[data-node-id]');
   const expectedNodeId = firstHtmlTarget?.getAttribute('data-node-id');
   if (!firstHtmlTarget || !expectedNodeId) throw new Error('missing HTML selection target');
+  const tamperedTarget = visualReceipt.outcome === 'fallback'
+    ? visualTarget.querySelectorAll('svg g[role="listitem"][data-node-id]')[1]
+    : htmlTarget.querySelectorAll('nav a[data-node-id]')[1];
+  if (!tamperedTarget) throw new Error('missing transaction target');
+  const originalTamperedId = tamperedTarget.getAttribute('data-node-id');
+  tamperedTarget.setAttribute('data-node-id', 'node:tampered');
+  let transactionRejected = false;
+  try { controller.dispatch({ type: 'select', nodeId: expectedNodeId, expectedSnapshotId: scene.inputHash }); }
+  catch (error) { transactionRejected = error instanceof Error && error.message === 'NODE_SELECTION_STALE_TARGET_ID'; }
+  if (originalTamperedId === null) throw new Error('missing original target ID');
+  tamperedTarget.setAttribute('data-node-id', originalTamperedId);
+  if (!transactionRejected || controller.getState().selectedNodeId !== null || commitCount() !== 0 || htmlTarget.querySelector('[data-selected]') || visualTarget.querySelector('[data-selected]')) throw new Error('transactional preflight');
+
+  firstHtmlTarget.focus();
+  if (document.activeElement !== firstHtmlTarget) throw new Error('HTML focus target');
   firstHtmlTarget.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
   if (controller.getState().selectedNodeId !== expectedNodeId || commitCount() !== 1 || firstHtmlTarget.getAttribute('aria-current') !== 'true') throw new Error('HTML Enter selection');
   firstHtmlTarget.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true, repeat: true }));
@@ -92,9 +120,11 @@ function runM3iSmoke({ htmlTarget, visualTarget, visualReceipt, controller, comm
   if (visualReceipt.outcome === 'fallback') {
     const firstSvgTarget = visualTarget.querySelector('svg g[role="listitem"][data-node-id]');
     if (!firstSvgTarget || firstSvgTarget.getAttribute('data-node-id') !== expectedNodeId) throw new Error('SVG focus parity');
+    firstSvgTarget.focus();
+    if (document.activeElement !== firstSvgTarget) throw new Error('SVG focus target');
     const space = new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true });
     firstSvgTarget.dispatchEvent(space);
-    if (!space.defaultPrevented || controller.getState().selectedNodeId !== expectedNodeId || commitCount() !== 3 || firstSvgTarget.getAttribute('aria-current') !== 'true') throw new Error('SVG Space selection');
+    if (!space.defaultPrevented || controller.getState().selectedNodeId !== expectedNodeId || commitCount() !== 3 || firstSvgTarget.getAttribute('aria-current') !== 'true' || firstHtmlTarget.getAttribute('aria-current') !== 'true') throw new Error('SVG Space selection');
     visualTarget.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
     if (controller.getState().selectedNodeId !== null || commitCount() !== 4) throw new Error('SVG Escape clear');
   } else {

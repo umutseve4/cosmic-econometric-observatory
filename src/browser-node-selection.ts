@@ -11,7 +11,6 @@ export interface NodeSelectionController {
   getState(): NodeSelectionState;
   dispatch(command: NodeSelectionCommand): NodeSelectionReceipt;
 }
-
 export type NodeSelectionTransition = Readonly<{ previous: NodeSelectionState; current: NodeSelectionState }>;
 
 export function createNodeSelectionController(input: Readonly<{
@@ -26,7 +25,6 @@ export function createNodeSelectionController(input: Readonly<{
   const initialSelectedNodeId = input.initialSelectedNodeId ?? null;
   if (initialSelectedNodeId !== null && !registry.has(initialSelectedNodeId)) throw new Error('NODE_SELECTION_UNKNOWN_INITIAL_NODE_ID');
   let state = freezeState(initialSelectedNodeId);
-
   return Object.freeze({
     getState(): NodeSelectionState { return state; },
     dispatch(command: NodeSelectionCommand): NodeSelectionReceipt {
@@ -36,9 +34,7 @@ export function createNodeSelectionController(input: Readonly<{
       if (command.type === 'select') {
         if (!registry.has(command.nodeId)) return Object.freeze({ outcome: 'rejected', code: 'NODE_SELECTION_UNKNOWN_NODE_ID', state, logicalCommitCount: 0 });
         selectedNodeId = command.nodeId;
-      } else {
-        selectedNodeId = null;
-      }
+      } else selectedNodeId = null;
       if (selectedNodeId === state.selectedNodeId) return Object.freeze({ outcome: 'noop', state, logicalCommitCount: 0 });
       const previous = state;
       const current = freezeState(selectedNodeId);
@@ -51,8 +47,29 @@ export function createNodeSelectionController(input: Readonly<{
 
 export type NodeSelectionProjection = 'html' | 'svg';
 export interface NodeSelectionBinding {
+  preflight(state: NodeSelectionState): void;
   apply(state: NodeSelectionState): void;
   dispose(): void;
+}
+
+/** Preflights every surface before mutation and restores prior state if a later
+ * binding fails, so the controller and all semantic projections stay aligned. */
+export function applyNodeSelectionTransition(bindings: readonly NodeSelectionBinding[], transition: NodeSelectionTransition): void {
+  for (const binding of bindings) binding.preflight(transition.current);
+  const applied: NodeSelectionBinding[] = [];
+  try {
+    for (const binding of bindings) {
+      binding.apply(transition.current);
+      applied.push(binding);
+    }
+  } catch (error) {
+    const rollbackErrors: unknown[] = [];
+    for (const binding of applied.reverse()) {
+      try { binding.apply(transition.previous); } catch (rollbackError) { rollbackErrors.push(rollbackError); }
+    }
+    if (rollbackErrors.length > 0) throw new AggregateError([error, ...rollbackErrors], 'NODE_SELECTION_ROLLBACK_FAILED');
+    throw error;
+  }
 }
 
 export function bindNodeSelectionSurface(input: Readonly<{
@@ -72,28 +89,42 @@ export function bindNodeSelectionSurface(input: Readonly<{
       ? 'svg g[role="listitem"][data-node-id]'
       : failUnsupportedProjection();
   const activationTargets = [...input.root.querySelectorAll(selector)];
-  const activationIds = activationTargets.map((element) => requiredNodeId(element));
+  const activationIds = activationTargets.map(requiredNodeId);
   if (new Set(activationIds).size !== activationIds.length) throw new Error('NODE_SELECTION_DUPLICATE_TARGET');
   if (!sameStrings(activationIds, focusOrderNodeIds)) throw new Error('NODE_SELECTION_TARGET_SET_MISMATCH');
   const targetIds = new Map<EventTarget, string>(activationTargets.map((element, index) => [element, activationIds[index]!]));
   const paintTargets = [...input.root.querySelectorAll('[data-node-id]')];
-  for (const target of paintTargets) if (!registry.has(requiredNodeId(target))) throw new Error('NODE_SELECTION_UNKNOWN_PAINT_TARGET');
+  const paintTargetIds = new Map<Element, string>();
+  for (const target of paintTargets) {
+    const id = requiredNodeId(target);
+    if (!registry.has(id)) throw new Error('NODE_SELECTION_UNKNOWN_PAINT_TARGET');
+    paintTargetIds.set(target, id);
+  }
   validateState(input.initialState, registry);
   let disposed = false;
 
-  const apply = (state: NodeSelectionState): void => {
+  const preflight = (state: NodeSelectionState): void => {
     if (disposed) throw new Error('NODE_SELECTION_BINDING_DISPOSED');
     validateState(state, registry);
-    for (const target of paintTargets) {
-      if (requiredNodeId(target) === state.selectedNodeId) target.setAttribute('data-selected', 'true');
-      else target.removeAttribute('data-selected');
-    }
-    for (const target of activationTargets) {
-      if (targetIds.get(target) === state.selectedNodeId) target.setAttribute('aria-current', 'true');
-      else target.removeAttribute('aria-current');
+    for (const [target, id] of paintTargetIds) {
+      if (!contains(input.root, target) || target.getAttribute('data-node-id') !== id) throw new Error('NODE_SELECTION_STALE_TARGET_ID');
     }
   };
-
+  const apply = (state: NodeSelectionState): void => {
+    preflight(state);
+    const selectedSnapshots = paintTargets.map((target) => [target, target.getAttribute('data-selected')] as const);
+    const currentSnapshots = activationTargets.map((target) => [target, target.getAttribute('aria-current')] as const);
+    try {
+      for (const target of paintTargets) setOptionalAttribute(target, 'data-selected', paintTargetIds.get(target) === state.selectedNodeId ? 'true' : null);
+      for (const target of activationTargets) setOptionalAttribute(target, 'aria-current', targetIds.get(target) === state.selectedNodeId ? 'true' : null);
+    } catch (error) {
+      const rollbackErrors: unknown[] = [];
+      for (const [target, value] of selectedSnapshots) try { setOptionalAttribute(target, 'data-selected', value); } catch (rollbackError) { rollbackErrors.push(rollbackError); }
+      for (const [target, value] of currentSnapshots) try { setOptionalAttribute(target, 'aria-current', value); } catch (rollbackError) { rollbackErrors.push(rollbackError); }
+      if (rollbackErrors.length > 0) throw new AggregateError([error, ...rollbackErrors], 'NODE_SELECTION_SURFACE_ROLLBACK_FAILED');
+      throw error;
+    }
+  };
   const onKeyDown = (rawEvent: Event): void => {
     if (disposed || !(rawEvent instanceof KeyboardEvent) || rawEvent.repeat) return;
     if (rawEvent.key === 'Escape') {
@@ -111,14 +142,11 @@ export function bindNodeSelectionSurface(input: Readonly<{
 
   apply(input.initialState);
   input.root.addEventListener('keydown', onKeyDown);
-  return Object.freeze({
-    apply,
-    dispose(): void {
-      if (disposed) return;
-      input.root.removeEventListener('keydown', onKeyDown);
-      disposed = true;
-    }
-  });
+  return Object.freeze({ preflight, apply, dispose(): void {
+    if (disposed) return;
+    input.root.removeEventListener('keydown', onKeyDown);
+    disposed = true;
+  } });
 }
 
 function validateSnapshotId(value: string): string {
@@ -143,10 +171,7 @@ function requiredNodeId(element: Element): string {
 function validateState(state: NodeSelectionState, registry: ReadonlySet<string>): void {
   if (state === null || typeof state !== 'object' || (state.selectedNodeId !== null && !registry.has(state.selectedNodeId))) throw new Error('NODE_SELECTION_UNKNOWN_STATE_NODE_ID');
 }
-function sameStrings(left: readonly string[], right: readonly string[]): boolean {
-  return left.length === right.length && left.every((value, index) => value === right[index]);
-}
-function contains(root: ParentNode & EventTarget, element: Element): boolean {
-  return root instanceof Node && root.contains(element);
-}
+function sameStrings(left: readonly string[], right: readonly string[]): boolean { return left.length === right.length && left.every((value, index) => value === right[index]); }
+function contains(root: ParentNode & EventTarget, element: Element): boolean { return root instanceof Node && root.contains(element); }
+function setOptionalAttribute(element: Element, name: string, value: string | null): void { if (value === null) element.removeAttribute(name); else element.setAttribute(name, value); }
 function failUnsupportedProjection(): never { throw new Error('NODE_SELECTION_UNSUPPORTED_PROJECTION'); }
