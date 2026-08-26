@@ -7,10 +7,12 @@
   "scripts": {
     "clean": "node -e \"import('node:fs').then(fs=>fs.rmSync('dist',{recursive:true,force:true}))\"",
     "build": "npm run clean && tsc -p tsconfig.json",
+    "build:site": "npm run build && node scripts/build-site.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "npm run build && node --test dist/tests/*.test.js tests/*.test.mjs",
     "test:browser-smoke": "node scripts/run-real-browser-smoke.mjs",
-    "verify": "npm run typecheck && npm test"
+    "verify:site": "npm run build:site && node scripts/verify-site.mjs",
+    "verify": "npm run typecheck && npm test && npm run verify:site"
   },
   "dependencies": { "three": "0.185.1" },
   "devDependencies": { "typescript": "5.9.2", "@types/node": "22.17.2" }
