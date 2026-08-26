@@ -90,7 +90,7 @@ export function createBrowserThreePort(
         camera.lookAt(0, 0, 0);
         renderer = new runtime.WebGLRenderer({ canvas, antialias: false, preserveDrawingBuffer: true });
         renderer.setPixelRatio(1);
-        renderer.setSize(320, 240, false);
+        renderer.setSize(960, 720, false);
         renderer.render(scene, camera);
         canvas.dataset.frame = 'rendered';
         canvas.dataset.nodeCount = String(canonical.nodes.length);
