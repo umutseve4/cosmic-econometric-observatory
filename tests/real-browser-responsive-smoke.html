@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Responsive product acceptance smoke</title>
+  <style>
+    html, body { margin: 0; width: 100%; min-height: 100%; }
+    iframe { display: block; width: 100%; height: 900px; border: 0; }
+    #result { position: fixed; inset: auto 0 0; margin: 0; padding: 4px; background: #fff; color: #000; z-index: 9999; }
+  </style>
+</head>
+<body>
+  <iframe id="site" title="Kozmik Ekonometri responsive test" src="/dist-site/index.html?responsive-smoke=1"></iframe>
+  <pre id="result">RESPONSIVE_PRODUCT_SMOKE_RUNNING</pre>
+  <script>
+    const PASS = 'RESPONSIVE_PRODUCT_SMOKE_PASS';
+    const FAIL = 'RESPONSIVE_PRODUCT_SMOKE_FAIL';
+    const result = document.querySelector('#result');
+    const frame = document.querySelector('#site');
+    const englishLeak = /\b(selected node|knowledge nodes|university|department|faculty|course|root node|child of|contains|belongs to)\b/i;
+
+    function fail(message) { result.textContent = `${FAIL}:${message}`; }
+    function inspect() {
+      const doc = frame.contentDocument;
+      if (!frame.contentWindow || !doc) throw new Error('iframe unavailable');
+      const viewport = doc.documentElement.clientWidth;
+      if (Math.abs(viewport - window.innerWidth) > 1) throw new Error(`viewport mismatch:${viewport}/${window.innerWidth}`);
+      if (doc.documentElement.scrollWidth > viewport || doc.body.scrollWidth > viewport) throw new Error(`horizontal overflow:${viewport}/${doc.documentElement.scrollWidth}/${doc.body.scrollWidth}`);
+      const offenders = [...doc.body.querySelectorAll('*')].filter((element) => {
+        if (element.matches('script, style, [hidden]')) return false;
+        const rect = element.getBoundingClientRect();
+        return rect.width > 0 && (rect.left < -1 || rect.right > viewport + 1);
+      });
+      if (offenders.length > 0) throw new Error(`clipped elements:${offenders.slice(0, 5).map((element) => element.id || element.className || element.tagName).join(',')}`);
+      const roots = ['#webgl-universe', '#html-universe'].map((selector) => doc.querySelector(selector)).filter(Boolean);
+      const surfaces = roots.flatMap((root) => [root.textContent || '', ...[...root.querySelectorAll('[aria-label], [title], svg title')].flatMap((element) => [element.getAttribute('aria-label') || '', element.getAttribute('title') || '', element.textContent || ''])]);
+      const leak = surfaces.find((value) => englishLeak.test(value));
+      if (leak) throw new Error(`English accessible-name leak:${leak.slice(0, 80)}`);
+      const runtime = doc.querySelector('#result')?.textContent?.trim();
+      if (runtime !== 'M3G_SITE_SMOKE_PASS') throw new Error(`runtime marker:${runtime || 'missing'}`);
+      result.textContent = PASS;
+    }
+
+    frame.addEventListener('load', () => {
+      const deadline = Date.now() + 20_000;
+      const poll = () => {
+        try {
+          const runtime = frame.contentDocument?.querySelector('#result')?.textContent?.trim() || '';
+          if (runtime === 'M3G_SITE_SMOKE_PASS') { inspect(); return; }
+          if (runtime.startsWith('M3G_SITE_SMOKE_FAIL')) { fail(runtime); return; }
+          if (Date.now() >= deadline) { fail(`timeout:${runtime || 'missing'}`); return; }
+          setTimeout(poll, 50);
+        } catch (error) { fail(error instanceof Error ? error.message : String(error)); }
+      };
+      poll();
+    }, { once: true });
+    frame.addEventListener('error', () => fail('iframe load error'), { once: true });
+  </script>
+</body>
+</html>
