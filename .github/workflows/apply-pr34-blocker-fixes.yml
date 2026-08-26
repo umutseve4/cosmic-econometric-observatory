@@ -6,127 +6,39 @@ on:
 permissions:
   contents: write
 jobs:
-  patch-test-commit:
+  patch:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: feat/professional-visual-redesign
-          fetch-depth: 0
+        with: {ref: feat/professional-visual-redesign, fetch-depth: 0}
       - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci --ignore-scripts
-      - name: Apply narrowly-scoped fixes
+        with: {node-version: 22, cache: npm}
+      - run: npm ci
+      - name: Apply exact replacements
         shell: python
         run: |
           from pathlib import Path
-
-          def replace(path, old, new, count=1):
-              p = Path(path)
-              text = p.read_text()
-              actual = text.count(old)
-              if actual != count:
-                  raise SystemExit(f"{path}: expected {count} matches, found {actual}")
-              p.write_text(text.replace(old, new))
-
-          replace('site/styles.css', '--dim:#69808b', '--dim:#8299a4')
-          replace('site/styles.css', ".viewport-frame::before{content:'CANLI ANALİZ EVRENİ';position:absolute;z-index:5;left:1.25rem;top:1.1rem;color:var(--dim);font-size:.68rem;font-weight:700;letter-spacing:.14em}", '')
-          replace('site/styles.css', ".viewport canvas,.viewport svg{display:block;width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;margin:0!important;object-fit:contain}", ".viewport canvas{display:block;width:100%!important;height:auto!important;aspect-ratio:4/3;max-width:100%!important;margin:auto!important}.viewport svg{display:block;width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;margin:0!important}")
-          replace('site/styles.css', ".viewport-frame::before{left:1rem;font-size:.61rem}", '')
-
-          replace('src/browser-three-adapter.ts', 'renderer.setSize(320, 240, false);', 'renderer.setSize(960, 720, false);')
-
-          old_svg = '''  if (projection === 'svg') {
-    const nodes = focusOrderedNodes.map((node, index) =>
-      `<g id="${escapeMarkup(node.id)}" role="listitem" tabindex="0" data-node-id="${escapeMarkup(node.id)}" data-semantic-kind="${escapeMarkup(node.semanticKind)}" aria-label="${index + 1} of ${focusOrderedNodes.length}: ${escapeMarkup(node.label)} (${escapeMarkup(node.semanticKind)})"><circle cx="${node.position.x}" cy="${node.position.z}" r="1"/><title>${escapeMarkup(node.label)}</title></g>`
-    ).join('');
-    const edges = orderedEdges.map((edge) =>
-      `<path data-edge-id="${escapeMarkup(edge.id)}" data-semantic-kind="${escapeMarkup(edge.semanticKind)}" data-source="${escapeMarkup(edge.source)}" data-target="${escapeMarkup(edge.target)}"/>`
-    ).join('');
-    return { ...common, content: `<svg role="group" aria-label="Academic knowledge universe"><g role="list" aria-label="Knowledge nodes">${nodes}</g><g role="group" aria-label="Knowledge relations">${edges}</g></svg>` };
-  }'''
-          new_svg = '''  if (projection === 'svg') {
-    const padding = 2;
-    const xValues = focusOrderedNodes.map(({ position }) => position.x);
-    const yValues = focusOrderedNodes.map(({ position }) => position.z);
-    const minX = (xValues.length === 0 ? 0 : Math.min(...xValues)) - padding;
-    const minY = (yValues.length === 0 ? 0 : Math.min(...yValues)) - padding;
-    const maxX = (xValues.length === 0 ? 0 : Math.max(...xValues)) + padding;
-    const maxY = (yValues.length === 0 ? 0 : Math.max(...yValues)) + padding;
-    const viewBox = [minX, minY, Math.max(1, maxX - minX), Math.max(1, maxY - minY)].map(formatCoordinate).join(' ');
-    const positions = new Map(focusOrderedNodes.map((node) => [node.id, node.position]));
-    const nodes = focusOrderedNodes.map((node, index) =>
-      `<g id="${escapeMarkup(node.id)}" role="listitem" tabindex="0" data-node-id="${escapeMarkup(node.id)}" data-semantic-kind="${escapeMarkup(node.semanticKind)}" aria-label="${index + 1} of ${focusOrderedNodes.length}: ${escapeMarkup(node.label)} (${escapeMarkup(node.semanticKind)})"><circle cx="${formatCoordinate(node.position.x)}" cy="${formatCoordinate(node.position.z)}" r="0.32" fill="#55d9e7"/><title>${escapeMarkup(node.label)}</title></g>`
-    ).join('');
-    const edges = orderedEdges.map((edge) => {
-      const source = positions.get(edge.source);
-      const target = positions.get(edge.target);
-      if (source === undefined || target === undefined) throw new Error(`INVALID_PROJECTION_EDGE_ENDPOINT:${edge.id}`);
-      const path = `M ${formatCoordinate(source.x)} ${formatCoordinate(source.z)} L ${formatCoordinate(target.x)} ${formatCoordinate(target.z)}`;
-      return `<path data-edge-id="${escapeMarkup(edge.id)}" data-semantic-kind="${escapeMarkup(edge.semanticKind)}" data-source="${escapeMarkup(edge.source)}" data-target="${escapeMarkup(edge.target)}" d="${path}" fill="none" stroke="#8ca2ff" stroke-width="0.08"/>`;
-    }).join('');
-    return { ...common, content: `<svg role="group" aria-label="Academic knowledge universe" viewBox="${viewBox}" preserveAspectRatio="xMidYMid meet"><g role="group" aria-label="Knowledge relations">${edges}</g><g role="list" aria-label="Knowledge nodes">${nodes}</g></svg>` };
-  }'''
-          replace('src/projections.ts', old_svg, new_svg)
-          replace('src/projections.ts', "function escapeMarkup(value: string): string {", "function formatCoordinate(value: number): string { return Object.is(value, -0) ? '0' : String(value); }\nfunction escapeMarkup(value: string): string {")
-
-          replace('tests/browser-three-adapter.test.ts', "const counters = { renders: 0, rendererDisposals: 0, resourceDisposals: 0 };", "const counters = { renders: 0, rendererDisposals: 0, resourceDisposals: 0, sizes: [] as Array<readonly [number, number, boolean]> };")
-          replace('tests/browser-three-adapter.test.ts', "setSize(_width: number, _height: number, _updateStyle: boolean): void {}", "setSize(width: number, height: number, updateStyle: boolean): void { counters.sizes.push([width, height, updateStyle]); }")
-          replace('tests/browser-three-adapter.test.ts', "assert.equal(fixture.counters.renders, 1);\n  assert.equal(fixture.counters.rendererDisposals, 1);", "assert.equal(fixture.counters.renders, 1);\n  assert.deepEqual(fixture.counters.sizes, [[960, 720, false]]);\n  assert.equal(fixture.counters.rendererDisposals, 1);", count=2)
-
-          replace('tests/projections.test.ts', "assert.match(svg, /^<svg role=\"group\" aria-label=\"Academic knowledge universe\">/);", "assert.match(svg, /^<svg role=\"group\" aria-label=\"Academic knowledge universe\" viewBox=\"-1 -1 5 5\" preserveAspectRatio=\"xMidYMid meet\">/);")
-          replace('tests/projections.test.ts', "assert.ok(svg.includes(`<path data-edge-id=\"${encodedEdgeId}\" data-semantic-kind=\"${encodedEdgeKind}\" data-source=\"${encodedNodeAId}\" data-target=\"${encodedNodeBId}\"/>`));", "assert.ok(svg.includes(`<path data-edge-id=\"${encodedEdgeId}\" data-semantic-kind=\"${encodedEdgeKind}\" data-source=\"${encodedNodeAId}\" data-target=\"${encodedNodeBId}\" d=\"M 1 1 L 2 2\" fill=\"none\" stroke=\"#8ca2ff\" stroke-width=\"0.08\"/>`));")
-          marker = "test('projection fails closed on duplicate node identifiers', () => {"
-          geometry_test = '''test('SVG emits finite padded geometry for every node and relation', () => {
-  const svg = project(scene, 'svg').content;
-  const viewBox = /viewBox="([^"]+)"/u.exec(svg)?.[1]?.split(' ').map(Number);
-  assert.deepEqual(viewBox, [-1, -1, 5, 5]);
-  assert.ok(viewBox?.every(Number.isFinite));
-  const paths = [...svg.matchAll(/<path\\b[^>]*\\bd="([^"]+)"[^>]*>/gu)];
-  assert.equal(paths.length, scene.edges.length);
-  for (const path of paths) {
-    const coordinates = path[1]!.match(/-?(?:\\d+\\.?\\d*|\\.\\d+)/gu)?.map(Number) ?? [];
-    assert.equal(coordinates.length, 4);
-    assert.ok(coordinates.every(Number.isFinite));
-    assert.notDeepEqual(coordinates.slice(0, 2), coordinates.slice(2, 4));
-  }
-});
-
-'''
-          replace('tests/projections.test.ts', marker, geometry_test + marker)
-
-          responsive_marker = "      const runtime = doc.querySelector('#result')?.textContent?.trim();"
-          responsive_checks = '''      if (mode === 'default') {
-        const canvas = visual?.querySelector('canvas');
-        if (!(canvas instanceof frame.contentWindow.HTMLCanvasElement)) throw new Error('default canvas missing');
-        const rect = canvas.getBoundingClientRect();
-        if (canvas.width !== 960 || canvas.height !== 720) throw new Error(`canvas intrinsic size:${canvas.width}x${canvas.height}`);
-        if (rect.width <= 0 || rect.height <= 0 || Math.abs((rect.width / rect.height) - (canvas.width / canvas.height)) > 0.02) throw new Error(`canvas aspect mismatch:${rect.width}/${rect.height}`);
-      } else {
-        const svg = visual?.querySelector('svg');
-        const values = (svg?.getAttribute('viewBox') || '').trim().split(/\\s+/u).map(Number);
-        if (values.length !== 4 || !values.every(Number.isFinite) || values[2] <= 0 || values[3] <= 0) throw new Error(`fallback viewBox:${values.join('/')}`);
-        const paths = [...svg.querySelectorAll('path[data-edge-id]')];
-        if (paths.length !== 4) throw new Error(`fallback edge count:${paths.length}`);
-        for (const path of paths) {
-          const d = path.getAttribute('d') || '';
-          const coordinates = d.match(/-?(?:\\d+\\.?\\d*|\\.\\d+)/gu)?.map(Number) || [];
-          if (!/^M\\s/u.test(d) || !/\\sL\\s/u.test(d) || coordinates.length !== 4 || !coordinates.every(Number.isFinite) || (coordinates[0] === coordinates[2] && coordinates[1] === coordinates[3])) throw new Error(`fallback edge geometry:${path.dataset.edgeId || 'missing'}`);
-        }
-      }
-'''
-          replace('tests/real-browser-responsive-smoke.html', responsive_marker, responsive_checks + responsive_marker)
-      - name: Verify full contract
-        run: npm run verify
-      - name: Verify browser product matrix
-        run: npm run test:browser-smoke
-      - name: Commit fixes and remove temporary workflow
-        run: |
-          rm .github/workflows/apply-pr34-blocker-fixes.yml
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add site/styles.css src/browser-three-adapter.ts src/projections.ts tests/browser-three-adapter.test.ts tests/projections.test.ts tests/real-browser-responsive-smoke.html .github/workflows/apply-pr34-blocker-fixes.yml
-          git commit -m "fix(site): close renderer and SVG acceptance blockers"
+          def r(path,old,new):
+            p=Path(path); s=p.read_text(); n=s.count(old)
+            if n!=1: raise SystemExit(f'{path}: expected 1 match, got {n}')
+            p.write_text(s.replace(old,new))
+          r('site/styles.css','--dim:#69808b','--dim:#8299a4')
+          r('site/styles.css',".viewport-frame::before{content:'CANLI ANALİZ EVRENİ';position:absolute;z-index:5;left:1.25rem;top:1.1rem;color:var(--dim);font-size:.68rem;font-weight:700;letter-spacing:.14em}",'')
+          r('site/styles.css','.viewport canvas,.viewport svg{display:block;width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;margin:0!important;object-fit:contain}', '.viewport canvas,.viewport svg{display:block;width:100%!important;max-width:none!important;max-height:none!important;margin:0!important}.viewport canvas{height:auto!important;aspect-ratio:4/3}.viewport svg{height:100%!important}')
+          r('site/styles.css','.viewport-frame::before{left:1rem;font-size:.61rem}','')
+          r('tests/projections.test.ts','assert.match(svg, /^<svg role="group" aria-label="Academic knowledge universe">/);','assert.match(svg, /^<svg role="group" aria-label="Academic knowledge universe" viewBox="-1 -1 5 5" preserveAspectRatio="xMidYMid meet">/);')
+          r('tests/projections.test.ts','assert.ok(svg.includes(`<path data-edge-id="${encodedEdgeId}" data-semantic-kind="${encodedEdgeKind}" data-source="${encodedNodeAId}" data-target="${encodedNodeBId}"/>`));','assert.ok(svg.includes(`<path data-edge-id="${encodedEdgeId}" data-semantic-kind="${encodedEdgeKind}" data-source="${encodedNodeAId}" data-target="${encodedNodeBId}" d="M 1 1 L 2 2" fill="none" stroke="#8ca2ff" stroke-width="0.08"/>`));')
+          r('tests/projections.test.ts',"  assert.ok(svg.indexOf('data-node-id=\"node:a\"') < svg.indexOf('data-node-id=\"node:b\"'));\n});", "  assert.ok(svg.indexOf('data-node-id=\"node:a\"') < svg.indexOf('data-node-id=\"node:b\"'));\n  assert.equal((svg.match(/<path /g) ?? []).length, 1);\n  assert.match(svg, /d=\"M 1 1 L 2 2\" fill=\"none\" stroke=\"#8ca2ff\"/);\n});")
+          r('tests/browser-three-adapter.test.ts','const counters = { renders: 0, rendererDisposals: 0, resourceDisposals: 0 };','const counters = { renders: 0, rendererDisposals: 0, resourceDisposals: 0, setSize: undefined as undefined | [number, number, boolean] };')
+          r('tests/browser-three-adapter.test.ts','setSize(_width: number, _height: number, _updateStyle: boolean): void {}','setSize(width: number, height: number, updateStyle: boolean): void { counters.setSize = [width, height, updateStyle]; }')
+          r('tests/browser-three-adapter.test.ts','  assert.equal(fixture.counters.renders, 1);\n  assert.equal(fixture.counters.rendererDisposals, 1);','  assert.equal(fixture.counters.renders, 1);\n  assert.deepEqual(fixture.counters.setSize, [960, 720, false]);\n  assert.equal(fixture.counters.rendererDisposals, 1);')
+          r('tests/real-browser-responsive-smoke.html',"      if (mode === 'default' && renderMode !== 'three') throw new Error(`default render mode:${renderMode || 'missing'}`);\n      if (mode === 'fallback' && (renderMode !== 'fallback' || visual.querySelector('svg') === null)) throw new Error(`fallback render mode:${renderMode || 'missing'}`);", "      if (mode === 'default' && renderMode !== 'three') throw new Error(`default render mode:${renderMode || 'missing'}`);\n      if (mode === 'default') { const canvas=visual.querySelector('canvas'); if (!canvas || canvas.width !== 960 || canvas.height !== 720) throw new Error(`canvas buffer:${canvas?.width || 0}x${canvas?.height || 0}`); const rect=canvas.getBoundingClientRect(); if (Math.abs(rect.width / rect.height - 4 / 3) > 0.02) throw new Error(`canvas aspect:${rect.width}/${rect.height}`); }\n      if (mode === 'fallback') { const svg=visual.querySelector('svg'); if (renderMode !== 'fallback' || !svg) throw new Error(`fallback render mode:${renderMode || 'missing'}`); const values=(svg.getAttribute('viewBox') || '').trim().split(/\\s+/u).map(Number); if (values.length !== 4 || values.some((v) => !Number.isFinite(v)) || values[2] <= 0 || values[3] <= 0) throw new Error(`svg viewBox:${values.join('/')}`); const paths=[...svg.querySelectorAll('path[data-edge-id]')]; if (paths.length !== 4 || paths.some((p) => !/^M -?\\d+(?:\\.\\d+)? -?\\d+(?:\\.\\d+)? L -?\\d+(?:\\.\\d+)? -?\\d+(?:\\.\\d+)?$/u.test(p.getAttribute('d') || ''))) throw new Error(`svg edge geometry:${paths.length}`); if (svg.querySelectorAll('g[data-node-id]').length !== 5) throw new Error('svg node count'); }")
+      - run: npm run verify
+      - run: npm run test:browser-smoke
+      - run: |
+          git rm .github/workflows/apply-pr34-blocker-fixes.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add site/styles.css tests/browser-three-adapter.test.ts tests/projections.test.ts tests/real-browser-responsive-smoke.html
+          git commit -m 'test(site): close visual renderer acceptance blockers'
           git push origin HEAD:feat/professional-visual-redesign
