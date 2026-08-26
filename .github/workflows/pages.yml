@@ -15,10 +15,12 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pages: write
+      pages: read
     steps:
       - name: Check out exact source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
       - name: Set up Node.js 22
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
@@ -39,17 +41,17 @@ jobs:
         shell: bash
         run: |
           manifest_sha256="$(sha256sum dist-site/artifact-manifest.json | cut -d ' ' -f 1)"
+          artifact_files="$(find dist-site -type f | wc -l)"
+          test "$artifact_files" -eq 11
           echo "manifest_sha256=${manifest_sha256}" >> "$GITHUB_OUTPUT"
           {
-            echo "### Pages artifact provenance"
-            echo "- Source SHA: \`${GITHUB_SHA}\`"
-            echo "- Manifest SHA-256: \`${manifest_sha256}\`"
-            echo "- Artifact files: \`$(find dist-site -type f | wc -l)\`"
+            echo '### Pages artifact provenance'
+            printf -- '- Source SHA: `%s`\n' "$GITHUB_SHA"
+            printf -- '- Manifest SHA-256: `%s`\n' "$manifest_sha256"
+            printf -- '- Artifact files: `%s`\n' "$artifact_files"
           } >> "$GITHUB_STEP_SUMMARY"
-      - name: Configure GitHub Pages
+      - name: Read GitHub Pages configuration
         uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b
-        with:
-          enablement: true
       - name: Upload verified Pages artifact
         uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b
         with:
