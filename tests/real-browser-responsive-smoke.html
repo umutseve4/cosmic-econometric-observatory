@@ -22,11 +22,7 @@
     const requestedWidth = Number(params.get('width'));
     const mode = params.get('mode');
     const englishLeak = /(^|[^\p{L}\p{N}])(academic knowledge universe|knowledge node details|knowledge relations|knowledge nodes|relations|university|department|faculty|institution|curriculum|course|source|program|selected node|root node|child of|contains|belongs to)(?=$|[^\p{L}\p{N}])/iu;
-    const englishLeakSamples = [
-      'Academic knowledge universe', 'Knowledge node details', 'Knowledge relations', 'Knowledge nodes', 'Relations',
-      'University', 'Department', 'Faculty', 'institution', 'curriculum', 'course', 'source', 'program',
-      'selected node', 'root node', 'child of', 'contains', 'belongs to'
-    ];
+    const englishLeakSamples = ['Academic knowledge universe', 'Knowledge node details', 'Knowledge relations', 'Knowledge nodes', 'Relations', 'University', 'Department', 'Faculty', 'institution', 'curriculum', 'course', 'source', 'program', 'selected node', 'root node', 'child of', 'contains', 'belongs to'];
     if (englishLeakSamples.some((sample) => !englishLeak.test(sample))) throw new Error('English leak oracle coverage drift');
     if (englishLeak.test('lisans programı')) throw new Error('English leak oracle Turkish false positive');
     if (!Number.isInteger(requestedWidth) || requestedWidth < 240 || requestedWidth > 2000) throw new Error('invalid requested width');
@@ -37,6 +33,9 @@
     function describedText(doc, element) {
       const ids = (element.getAttribute('aria-describedby') || '').trim().split(/\s+/u).filter(Boolean);
       return ids.map((id) => doc.getElementById(id)?.textContent || '').join(' ');
+    }
+    function finitePath(path) {
+      return /^M -?\d+(?:\.\d+)? -?\d+(?:\.\d+)? L -?\d+(?:\.\d+)? -?\d+(?:\.\d+)?$/u.test(path);
     }
     function inspect() {
       const doc = frame.contentDocument;
@@ -67,8 +66,22 @@
       if (leak) throw new Error(`English accessible-name leak:${leak.slice(0, 80)}`);
       const visual = doc.querySelector('#webgl-universe');
       const renderMode = visual?.dataset.renderMode;
-      if (mode === 'default' && renderMode !== 'three') throw new Error(`default render mode:${renderMode || 'missing'}`);
-      if (mode === 'fallback' && (renderMode !== 'fallback' || visual.querySelector('svg') === null)) throw new Error(`fallback render mode:${renderMode || 'missing'}`);
+      if (mode === 'default') {
+        if (renderMode !== 'three') throw new Error(`default render mode:${renderMode || 'missing'}`);
+        const canvas = visual.querySelector('canvas');
+        if (!canvas || canvas.width !== 960 || canvas.height !== 720) throw new Error(`canvas buffer:${canvas?.width || 0}x${canvas?.height || 0}`);
+        const rect = canvas.getBoundingClientRect();
+        if (rect.height <= 0 || Math.abs(rect.width / rect.height - 4 / 3) > 0.02) throw new Error(`canvas aspect:${rect.width}/${rect.height}`);
+      }
+      if (mode === 'fallback') {
+        const svg = visual?.querySelector('svg');
+        if (renderMode !== 'fallback' || !svg) throw new Error(`fallback render mode:${renderMode || 'missing'}`);
+        const values = (svg.getAttribute('viewBox') || '').trim().split(/\s+/u).map(Number);
+        if (values.length !== 4 || values.some((value) => !Number.isFinite(value)) || values[2] <= 0 || values[3] <= 0) throw new Error(`svg viewBox:${values.join('/')}`);
+        const paths = [...svg.querySelectorAll('path[data-edge-id]')];
+        if (paths.length !== 4 || paths.some((path) => !finitePath(path.getAttribute('d') || ''))) throw new Error(`svg edge geometry:${paths.length}`);
+        if (svg.querySelectorAll('g[data-node-id]').length !== 5) throw new Error('svg node count');
+      }
       const runtime = doc.querySelector('#result')?.textContent?.trim();
       if (runtime !== 'M3G_SITE_SMOKE_PASS') throw new Error(`runtime marker:${runtime || 'missing'}`);
       result.textContent = PASS;
