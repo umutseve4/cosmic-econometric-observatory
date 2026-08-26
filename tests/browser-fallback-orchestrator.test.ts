@@ -35,7 +35,7 @@ test('keeps the successful Three path to exactly one target commit', () => {
 test('mounts one usable semantic fallback after zero failed-Three target commits', () => {
   const three = project(scene, 'three'); const html = project(scene, 'html');
   let threePreparations = 0; let fallbackPreparations = 0; const committedRoots: string[] = [];
-  const receipt = renderThreeWithFallback(three, html, { replaceChildren(...roots) { committedRoots.push(...roots); } }, {
+  const receipt = renderThreeWithFallback<string>(three, html, { replaceChildren(...roots) { committedRoots.push(...roots); } }, {
     dom: { prepareHtml() { fallbackPreparations += 1; return prepared(html, 'html-root'); }, prepareSvg() { throw new Error('unused'); } },
     three: { prepareThree() { threePreparations += 1; throw new Error('forced-webgl-failure'); } }
   });
