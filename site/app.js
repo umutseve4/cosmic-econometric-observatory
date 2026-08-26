@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { createBrowserDomPort } from './modules/browser-dom-adapter.js';
 import { renderProjection } from './modules/browser-renderer.js';
+import { renderThreeWithFallback } from './modules/browser-fallback-orchestrator.js';
 import { createBrowserThreePort } from './modules/browser-three-adapter.js';
 import { project } from './modules/projections.js';
 
@@ -25,9 +26,15 @@ const result = document.querySelector('#result');
 try {
   const dom = createBrowserDomPort(document);
   const htmlReceipt = renderProjection(project(scene, 'html'), document.querySelector('#html-universe'), { dom });
-  const threeReceipt = renderProjection(project(scene, 'three'), document.querySelector('#webgl-universe'), { dom, three: createBrowserThreePort(document, THREE) });
+  const visualReceipt = renderThreeWithFallback(
+    project(scene, 'three'), project(scene, 'svg'), document.querySelector('#webgl-universe'),
+    { dom, three: createBrowserThreePort(document, THREE) }
+  );
   const canvas = document.querySelector('#webgl-universe canvas');
-  if (htmlReceipt.nodeIds.length !== 5 || htmlReceipt.edgeIds.length !== 4 || threeReceipt.nodeIds.length !== 5 || threeReceipt.edgeIds.length !== 4 || canvas?.dataset.frame !== 'rendered') throw new Error('artifact semantic parity');
+  const svg = document.querySelector('#webgl-universe svg');
+  const visualReady = visualReceipt.outcome === 'three' ? canvas?.dataset.frame === 'rendered' : svg !== null;
+  if (htmlReceipt.nodeIds.length !== 5 || htmlReceipt.edgeIds.length !== 4 || visualReceipt.render.nodeIds.length !== 5 || visualReceipt.render.edgeIds.length !== 4 || !visualReady) throw new Error('artifact semantic parity');
+  document.querySelector('#webgl-universe').dataset.renderMode = visualReceipt.outcome;
   result.textContent = 'M3G_SITE_SMOKE_PASS';
 } catch (error) {
   result.textContent = `M3G_SITE_SMOKE_FAIL:${error instanceof Error ? error.message : String(error)}`;

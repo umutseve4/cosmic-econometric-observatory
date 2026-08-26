@@ -4,6 +4,7 @@ export * from './canonical.js';
 export * from './scene.js';
 export * from './projections.js';
 export * from './browser-renderer.js';
+export * from './browser-fallback-orchestrator.js';
 export * from './browser-dom-adapter.js';
 export * from './browser-three-adapter.js';
 export * from './buu-snapshot.js';
