@@ -84,6 +84,7 @@ function validateAndOrderNodes(nodes: readonly SceneNode[]): SceneNode[] {
   for (const node of nodes) {
     if (ids.has(node.id)) throw new Error(`DUPLICATE_PROJECTION_NODE_ID:${node.id}`);
     if (!Number.isSafeInteger(node.focusOrder) || node.focusOrder < 1 || focusOrders.has(node.focusOrder)) throw new Error(`INVALID_PROJECTION_FOCUS_ORDER:${node.id}:${node.focusOrder}`);
+    if (!Number.isFinite(node.position.x) || !Number.isFinite(node.position.y) || !Number.isFinite(node.position.z)) throw new Error(`INVALID_PROJECTION_POSITION:${node.id}`);
     ids.add(node.id); focusOrders.add(node.focusOrder);
   }
   return [...nodes].sort((a, b) => a.focusOrder - b.focusOrder || compareCodePoints(a.id, b.id));
