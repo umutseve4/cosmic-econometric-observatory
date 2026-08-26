@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { createReadStream, statSync } from 'node:fs';
+import { createReadStream, realpathSync, statSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { extname, normalize, resolve, sep } from 'node:path';
 import { closeServerBounded, usesDetachedProcessGroup, waitForBrowserExit } from './browser-smoke-process.mjs';
@@ -38,12 +38,18 @@ const server = createServer((request, response) => {
     return;
   }
   try {
-    if (!statSync(file).isFile()) throw new Error('not-file');
+    const physicalRoot = realpathSync(activeCase.serveRoot);
+    const physicalFile = realpathSync(file);
+    if (physicalFile !== physicalRoot && !physicalFile.startsWith(`${physicalRoot}${sep}`)) {
+      response.writeHead(403).end('forbidden');
+      return;
+    }
+    if (!statSync(physicalFile).isFile()) throw new Error('not-file');
     response.writeHead(200, {
-      'content-type': contentTypes.get(extname(file)) ?? 'application/octet-stream',
+      'content-type': contentTypes.get(extname(physicalFile)) ?? 'application/octet-stream',
       'cache-control': 'no-store'
     });
-    createReadStream(file).pipe(response);
+    createReadStream(physicalFile).pipe(response);
   } catch {
     response.writeHead(404).end('not found');
   }
