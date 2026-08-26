@@ -15,10 +15,7 @@
   <div class="ambient ambient-two" aria-hidden="true"></div>
   <main class="shell">
     <header class="masthead">
-      <a class="brand" href="#top" aria-label="Kozmik Ekonometri Rasathanesi ana sayfa">
-        <span class="brand-mark" aria-hidden="true">K·E·R</span>
-        <span class="brand-copy"><strong>Kozmik Ekonometri</strong><small>Bilginin yörüngesini izle</small></span>
-      </a>
+      <a class="brand" href="#top" aria-label="Kozmik Ekonometri Rasathanesi ana sayfa"><span class="brand-mark" aria-hidden="true">K·E·R</span><span class="brand-copy"><strong>Kozmik Ekonometri</strong><small>Bilginin yörüngesini izle</small></span></a>
       <span class="status"><i aria-hidden="true"></i><span>Canlı bilgi haritası</span></span>
     </header>
 
@@ -27,10 +24,7 @@
         <p class="eyebrow"><span>01</span> Akademik bilginin gözlemevi</p>
         <h1 id="hero-title">Her bilginin bir <em>kaynağı</em>, her ilişkinin bir izi var.</h1>
         <p class="lede">Dağınık müfredat verilerini; kaynağı görülebilen, ilişkileri keşfedilebilen ve geçmişi sessizce değiştirmeyen yaşayan bir bilgi evrenine dönüştürüyoruz.</p>
-        <div class="hero-actions">
-          <a class="primary-action" href="#semantic-universe">Evreni keşfet <span aria-hidden="true">↓</span></a>
-          <span class="interaction-hint">Bir düğüm seçerek ilişkileri incele</span>
-        </div>
+        <div class="hero-actions"><a class="primary-action" href="#semantic-universe">Evreni keşfet <span aria-hidden="true">↓</span></a><span class="interaction-hint">Bir düğüm seçerek ilişkileri incele</span></div>
         <dl class="metrics" aria-label="Gösterim özeti">
           <div><dt>Bilgi düğümü</dt><dd>05</dd><span>Kaynakla bağlı</span></div>
           <div><dt>Doğrulanmış ilişki</dt><dd>04</dd><span>İzlenebilir bağ</span></div>
@@ -41,13 +35,9 @@
       <div class="visual-stage">
         <div class="visual-heading"><span>Etkileşimli yörünge</span><span class="pulse-label">Sistem aktif</span></div>
         <div class="viewport-frame">
-          <div class="orbit orbit-a" aria-hidden="true"></div>
-          <div class="orbit orbit-b" aria-hidden="true"></div>
-          <div class="orbit orbit-c" aria-hidden="true"></div>
-          <div class="star-field" aria-hidden="true"></div>
+          <div class="orbit orbit-a" aria-hidden="true"></div><div class="orbit orbit-b" aria-hidden="true"></div><div class="orbit orbit-c" aria-hidden="true"></div><div class="star-field" aria-hidden="true"></div>
           <div id="webgl-universe" class="viewport" aria-label="Akademik bilgi evreninin etkileşimli görsel gösterimi"></div>
-          <span class="coordinate coordinate-a" aria-hidden="true">40.1885° K</span>
-          <span class="coordinate coordinate-b" aria-hidden="true">29.0610° D</span>
+          <span class="coordinate coordinate-a" aria-hidden="true">40.1885° K</span><span class="coordinate coordinate-b" aria-hidden="true">29.0610° D</span>
         </div>
         <p class="visual-caption"><span aria-hidden="true">↳</span> Aynı veri, erişilebilir semantik görünümle birebir eşleşir.</p>
       </div>
@@ -58,10 +48,7 @@
         <p class="eyebrow"><span>02</span> İzlenebilir bilgi ağı</p>
         <h2 id="semantic-title">Bilgi düğümleri ve ilişkiler</h2>
         <p>Üniversiteden derse uzanan yapıyı incele. Düğümler arasında klavyeyle gezinebilir, <kbd>Enter</kbd> ile seçim yapabilir ve <kbd>Esc</kbd> ile seçimi temizleyebilirsin.</p>
-        <div class="legend" aria-label="Harita göstergeleri">
-          <span><i class="legend-node" aria-hidden="true"></i> Bilgi düğümü</span>
-          <span><i class="legend-line" aria-hidden="true"></i> Doğrulanmış ilişki</span>
-        </div>
+        <div class="legend" aria-label="Harita göstergeleri"><span><i class="legend-node" aria-hidden="true"></i> Bilgi düğümü</span><span><i class="legend-line" aria-hidden="true"></i> Doğrulanmış ilişki</span></div>
       </div>
       <div class="universe-card">
         <div class="card-topline"><span>Akademik veri katmanı</span><span>2025–2026 görünümü</span></div>
@@ -79,38 +66,52 @@
       </div>
     </section>
 
-    <footer>
-      <div><strong>Kozmik Ekonometri Rasathanesi</strong><span>Kanıta dayalı akademik bilgi altyapısı</span></div>
-      <span class="footer-note">Umut SEVER tarafından geliştiriliyor · 2026</span>
-    </footer>
+    <footer><div><strong>Kozmik Ekonometri Rasathanesi</strong><span>Kanıta dayalı akademik bilgi altyapısı</span></div><span class="footer-note">Umut SEVER tarafından geliştiriliyor · 2026</span></footer>
   </main>
   <pre id="result" class="smoke-result" aria-live="polite">RUNNING</pre>
   <script>
     (() => {
       const result = document.querySelector('#result');
-      const report = (message) => {
-        if (result.textContent === 'RUNNING') result.textContent = `M3G_SITE_SMOKE_FAIL:MODULE:${message}`;
-      };
+      const report = (message) => { if (result.textContent === 'RUNNING') result.textContent = `M3G_SITE_SMOKE_FAIL:MODULE:${message}`; };
       window.__reportM3gModuleFailure = report;
       window.addEventListener('error', (event) => report(event.message || 'script-error'));
       window.addEventListener('unhandledrejection', (event) => report(event.reason instanceof Error ? event.reason.message : String(event.reason)));
 
-      const translations = new Map([
+      const phrases = [
+        ['Academic knowledge universe', 'Akademik bilgi evreni'], ['Knowledge node details', 'Bilgi düğümü ayrıntıları'],
+        ['Knowledge relations', 'Bilgi ilişkileri'], ['Knowledge nodes', 'Bilgi düğümleri'], ['Relations', 'İlişkiler'],
         ['Bursa Uludağ University', 'Bursa Uludağ Üniversitesi'], ['Econometrics', 'Ekonometri'],
         ['2025–2026 Curriculum', '2025–2026 Müfredatı'], ['Content-addressed snapshot', 'İçerik adresli kaynak görüntüsü'],
-        ['institution', 'kurum'], ['program', 'program'], ['curriculum', 'müfredat'], ['course', 'ders'], ['source', 'kaynak'],
+        ['institution', 'kurum'], ['curriculum', 'müfredat'], ['course', 'ders'], ['source', 'kaynak'],
         ['inspect', 'incele'], ['navigate', 'gezin'], ['CONTAINS', 'İÇERİR'], ['PUBLISHES', 'YAYIMLAR'], ['INCLUDES', 'KAPSAR'], ['SUPPORTS', 'DESTEKLER']
-      ]);
+      ];
+      const translate = (value) => {
+        let output = value;
+        for (const [from, to] of phrases) output = output.split(from).join(to);
+        output = output.replace(/(\d+) of (\d+):/g, '$2 öğeden $1.:');
+        return output;
+      };
       const localize = (root) => {
         const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
         let node;
         while ((node = walker.nextNode())) {
-          const replacement = translations.get(node.nodeValue.trim());
-          if (replacement) node.nodeValue = node.nodeValue.replace(node.nodeValue.trim(), replacement);
+          const translated = translate(node.nodeValue);
+          if (translated !== node.nodeValue) node.nodeValue = translated;
+        }
+        for (const element of root.querySelectorAll('[aria-label], [title]')) {
+          for (const attribute of ['aria-label', 'title']) {
+            const value = element.getAttribute(attribute);
+            if (value !== null) {
+              const translated = translate(value);
+              if (translated !== value) element.setAttribute(attribute, translated);
+            }
+          }
         }
       };
-      const target = document.querySelector('#html-universe');
-      new MutationObserver(() => localize(target)).observe(target, { childList: true, subtree: true });
+      const roots = [document.querySelector('#html-universe'), document.querySelector('#webgl-universe')];
+      const refresh = () => roots.forEach(localize);
+      roots.forEach((root) => new MutationObserver(refresh).observe(root, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['aria-label', 'title'] }));
+      refresh();
     })();
   </script>
   <script type="module" src="./app.js" onerror="window.__reportM3gModuleFailure('load-error')"></script>
