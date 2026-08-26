@@ -13,11 +13,14 @@ const contentTypes = new Map([
   ['.json', 'application/json; charset=utf-8'],
   ['.map', 'application/json; charset=utf-8']
 ]);
-const cases = [
-  { page: 'tests/real-browser-dom-smoke.html', pass: 'M3D_BROWSER_SMOKE_PASS', fail: 'M3D_BROWSER_SMOKE_FAIL', flags: ['--disable-gpu'] },
-  { page: 'tests/real-browser-three-smoke.html', pass: 'M3F_BROWSER_SMOKE_PASS', fail: 'M3F_BROWSER_SMOKE_FAIL', flags: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] },
-  { page: 'dist-site/index.html', pass: 'M3G_SITE_SMOKE_PASS', fail: 'M3G_SITE_SMOKE_FAIL', flags: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] }
+const allCases = [
+  { id: 'm3d-dom', page: 'tests/real-browser-dom-smoke.html', pass: 'M3D_BROWSER_SMOKE_PASS', fail: 'M3D_BROWSER_SMOKE_FAIL', flags: ['--disable-gpu'] },
+  { id: 'm3f-three', page: 'tests/real-browser-three-smoke.html', pass: 'M3F_BROWSER_SMOKE_PASS', fail: 'M3F_BROWSER_SMOKE_FAIL', flags: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] },
+  { id: 'm3g-artifact', page: 'dist-site/index.html', pass: 'M3G_SITE_SMOKE_PASS', fail: 'M3G_SITE_SMOKE_FAIL', flags: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] }
 ];
+const selectedCase = process.env.BROWSER_SMOKE_CASE;
+const cases = selectedCase === undefined ? allCases : allCases.filter((testCase) => testCase.id === selectedCase);
+if (cases.length === 0) throw new Error(`unknown BROWSER_SMOKE_CASE: ${String(selectedCase)}`);
 
 const server = createServer((request, response) => {
   const pathname = new URL(request.url ?? '/', 'http://127.0.0.1').pathname;
@@ -56,7 +59,7 @@ async function runCase(testCase, port) {
   browser.stderr.on('data', (chunk) => { stderr += chunk; });
   const exit = await waitForBrowserExit(browser, testCase.page, { timeoutMs, shutdownGraceMs });
   if (exit.code !== 0 || exit.signal !== null) throw new Error(`Chrome failed for ${testCase.page}: code=${String(exit.code)} signal=${String(exit.signal)}\n${stderr}`);
-  const resultMatch = stdout.match(/<pre id="result"[^>]*>([\s\S]*?)<\/pre>/u);
+  const resultMatch = stdout.match(/<pre\b[^>]*\bid="result"[^>]*>([\s\S]*?)<\/pre>/u);
   if (resultMatch === null) throw new Error(`browser page did not serialize #result for ${testCase.page}\n${stdout}\n${stderr}`);
   const resultText = resultMatch[1]?.trim() ?? '';
   if (resultText.startsWith(testCase.fail)) throw new Error(`browser page reported failure for ${testCase.page}\n${resultText}`);
