@@ -27,7 +27,7 @@ jobs:
           const replacements = [
             ['--dim:#69808b', '--dim:#8299a4'],
             ['.viewport-frame::before{content:"CANLI ANALİZ EVRENİ";position:absolute;left:1.4rem;top:1rem;z-index:3;font-size:.64rem;font-weight:900;letter-spacing:.18em;color:#9eb0b9}', ''],
-            ['.viewport canvas,.viewport svg{display:block;width:100%!important;height:100%!important;border-radius:16px}', '.viewport canvas{display:block;width:100%!important;height:auto!important;aspect-ratio:4/3;border-radius:16px}.viewport svg{display:block;width:100%!important;height:100%!important;border-radius:16px}'],
+            ['.viewport canvas,.viewport svg{display:block;width:100%!important;height:100%!important;background:radial-gradient(circle at 50% 35%,rgba(41,78,105,.2),transparent 55%);border-radius:16px}', '.viewport canvas{display:block;width:100%!important;height:auto!important;aspect-ratio:4/3;background:radial-gradient(circle at 50% 35%,rgba(41,78,105,.2),transparent 55%);border-radius:16px}.viewport svg{display:block;width:100%!important;height:100%!important;background:radial-gradient(circle at 50% 35%,rgba(41,78,105,.2),transparent 55%);border-radius:16px}'],
             ['.viewport-frame::before{left:1rem;font-size:.61rem}', '']
           ];
           for (const [from, to] of replacements) {
