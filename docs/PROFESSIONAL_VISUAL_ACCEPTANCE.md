@@ -13,3 +13,5 @@ PR #34 is accepted only when all gates below are evidenced on the exact head.
 - Merge is followed by exact-main CI, a 13-file Pages artifact, deployment success, and live manifest `sourceSha` equality with the squash-merge SHA.
 
 Automated geometry checks are not aesthetic acceptance. Production remains unchanged until every pre-merge gate passes.
+
+- The CI commit SHA must exactly match the candidate head.
