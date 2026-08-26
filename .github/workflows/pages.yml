@@ -42,7 +42,7 @@ jobs:
         run: |
           manifest_sha256="$(sha256sum dist-site/artifact-manifest.json | cut -d ' ' -f 1)"
           artifact_files="$(find dist-site -type f | wc -l)"
-          test "$artifact_files" -eq 11
+          test "$artifact_files" -eq 12
           echo "manifest_sha256=${manifest_sha256}" >> "$GITHUB_OUTPUT"
           {
             echo '### Pages artifact provenance'
