@@ -46,7 +46,7 @@ export interface NodeSelectionBinding {
 }
 
 /** Strict phases: every preflight, then every exact capture, then mutations.
- * No validation or capture runs after the first mutation starts. */
+ * Rollback runs bindings and their attribute operations in exact reverse order. */
 export function applyNodeSelectionTransition(bindings: readonly NodeSelectionBinding[], transition: NodeSelectionTransition): void {
   for (const binding of bindings) binding.preflight(transition.current);
   const restorers = bindings.map((binding) => binding.capture());
@@ -99,12 +99,16 @@ export function bindNodeSelectionSurface(input: Readonly<{
   };
   const capture = (): (() => void) => {
     if (disposed) throw new Error('NODE_SELECTION_BINDING_DISPOSED');
-    const selectedSnapshots = paintTargets.map((target) => [target, target.getAttribute('data-selected')] as const);
-    const currentSnapshots = activationTargets.map((target) => [target, target.getAttribute('aria-current')] as const);
+    const operations: Array<readonly [Element, string, string | null]> = [
+      ...paintTargets.map((target) => [target, 'data-selected', target.getAttribute('data-selected')] as const),
+      ...activationTargets.map((target) => [target, 'aria-current', target.getAttribute('aria-current')] as const)
+    ];
     return () => {
       const errors: unknown[] = [];
-      for (const [target, value] of selectedSnapshots) try { setOptionalAttribute(target, 'data-selected', value); } catch (error) { errors.push(error); }
-      for (const [target, value] of currentSnapshots) try { setOptionalAttribute(target, 'aria-current', value); } catch (error) { errors.push(error); }
+      for (let index = operations.length - 1; index >= 0; index -= 1) {
+        const [target, name, value] = operations[index]!;
+        try { setOptionalAttribute(target, name, value); } catch (error) { errors.push(error); }
+      }
       if (errors.length > 0) throw new AggregateError(errors, 'NODE_SELECTION_SURFACE_RESTORE_FAILED');
     };
   };
