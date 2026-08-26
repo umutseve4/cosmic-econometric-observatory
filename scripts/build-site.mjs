@@ -24,6 +24,7 @@ const copies = new Map([
   ['dist/src/canonical.js', 'modules/canonical.js'],
   ['dist/src/projections.js', 'modules/projections.js'],
   ['dist/src/browser-renderer.js', 'modules/browser-renderer.js'],
+  ['dist/src/browser-fallback-orchestrator.js', 'modules/browser-fallback-orchestrator.js'],
   ['dist/src/browser-dom-adapter.js', 'modules/browser-dom-adapter.js'],
   ['dist/src/browser-three-adapter.js', 'modules/browser-three-adapter.js'],
   ['node_modules/three/build/three.core.js', 'vendor/three.core.js'],
