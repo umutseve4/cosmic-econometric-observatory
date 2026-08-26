@@ -21,7 +21,7 @@
     const params = new URL(location.href).searchParams;
     const requestedWidth = Number(params.get('width'));
     const mode = params.get('mode');
-    const englishLeak = /\b(selected node|knowledge nodes|university|department|faculty|course|program|root node|child of|contains|belongs to)\b/i;
+    const englishLeak = /(^|[^\p{L}\p{N}])(selected node|knowledge nodes|university|department|faculty|course|program|root node|child of|contains|belongs to)(?=$|[^\p{L}\p{N}])/iu;
     if (!Number.isInteger(requestedWidth) || requestedWidth < 240 || requestedWidth > 2000) throw new Error('invalid requested width');
     if (mode !== 'default' && mode !== 'fallback') throw new Error('invalid render mode');
     frame.style.width = `${requestedWidth}px`;
