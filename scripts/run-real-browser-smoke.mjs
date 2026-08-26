@@ -53,8 +53,16 @@ async function runCase(testCase, port) {
   if (resultText !== testCase.pass) throw new Error(`browser page reported unexpected result for ${testCase.page}: ${resultText}`);
   console.log(`${testCase.id}:${testCase.pass}`);
 }
+function annotateFailure(error) {
+  const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+  const escaped = message.replaceAll('%', '%25').replaceAll('\r', '%0D').replaceAll('\n', '%0A');
+  console.error(`::error title=Browser smoke ${activeCase.id}::${escaped}`);
+}
 try {
   await new Promise((resolveListen, rejectListen) => { server.once('error', rejectListen); server.listen(0, '127.0.0.1', resolveListen); });
   const address = server.address(); if (address === null || typeof address === 'string') throw new Error('ephemeral port unavailable');
   for (const testCase of cases) await runCase(testCase, address.port);
+} catch (error) {
+  annotateFailure(error);
+  throw error;
 } finally { await closeServerBounded(server, shutdownGraceMs); }

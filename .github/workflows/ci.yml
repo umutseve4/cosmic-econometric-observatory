@@ -26,6 +26,18 @@ jobs:
         run: npm run verify
       - name: Report Chrome version
         run: google-chrome --version
+      - name: Diagnose M3i Three selection smoke
+        id: m3i_three
+        continue-on-error: true
+        env:
+          BROWSER_SMOKE_CASE: m3i-selection-three
+        run: npm run test:browser-smoke
+      - name: Diagnose M3i fallback selection smoke
+        id: m3i_fallback
+        continue-on-error: true
+        env:
+          BROWSER_SMOKE_CASE: m3i-selection-fallback
+        run: npm run test:browser-smoke
       - name: Run real-browser smoke suite
         run: npm run test:browser-smoke
       - name: Verify production dependency tree
