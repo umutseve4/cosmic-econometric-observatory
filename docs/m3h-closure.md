@@ -18,7 +18,7 @@ The merged boundary:
 - PR exact head: `89898ac9e202cb40b11aaa09fbad670bb1add68f`.
 - PR exact-head CI: [run `32952987596`, job `98128405299`](https://github.com/umutseve4/cosmic-econometric-observatory/actions/runs/32952987596/job/98128405299), `completed/success` from `2026-08-26T09:26:16Z` to `2026-08-26T09:26:51Z`.
 - Independent exact-head QA: PASS; CRITICAL/HIGH/MEDIUM/LOW = `0/0/0/0`; no merge blocker.
-- Squash merge: `38e8314978ef87d7c962c36f6161580d4c6e9f90` at `2026-08-26T09:28:35Z`.
+- Squash merge: `38e8314978ef87d7c962c36f6161580d4c6e9f90` at `2026-08-26T09:28:36Z`.
 - Exact-main native push check: [`verify` check run `98129078877`](https://api.github.com/repos/umutseve4/cosmic-econometric-observatory/check-runs/98129078877), suite `89262843081`, `completed/success` from `2026-08-26T09:28:44Z` to `2026-08-26T09:29:19Z`.
 
 The verification workflow covers TypeScript type checking, Node tests, deterministic static artifact verification, a real Chromium/SwiftShader smoke suite, production dependency-tree verification and immutable artifact capture. The forced-failure browser case verifies a usable semantic fallback with zero failed-Three canvas mounts and exact node/edge/focus-order parity.
