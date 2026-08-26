@@ -4,17 +4,12 @@ import type { ProjectionManifest, SceneIR } from '../src/index.js';
 import { project } from '../src/projections.js';
 
 const scene: SceneIR = {
-  schemaVersion: '0.1.0',
-  layoutVersion: 'test-v1',
-  seed: 'projection-test',
-  inputHash: `sha256:${'a'.repeat(64)}`,
+  schemaVersion: '0.1.0', layoutVersion: 'test-v1', seed: 'projection-test', inputHash: `sha256:${'a'.repeat(64)}`,
   nodes: [
     { id: 'node:b', semanticKind: 'course', label: 'B & Beyond', position: { x: 2, y: 0, z: 2 }, focusOrder: 2, capabilities: ['inspect', 'navigate'] },
     { id: 'node:a', semanticKind: 'program', label: 'A <Program>', position: { x: 1, y: 0, z: 1 }, focusOrder: 1, capabilities: ['inspect', 'navigate'] }
   ],
-  edges: [
-    { id: 'edge:b-a', semanticKind: 'CONTAINS', source: 'node:a', target: 'node:b' }
-  ]
+  edges: [{ id: 'edge:b-a', semanticKind: 'CONTAINS', source: 'node:a', target: 'node:b' }]
 };
 
 function assertStructurallyNested(markup: string): void {
@@ -27,25 +22,13 @@ function assertStructurallyNested(markup: string): void {
     let closing = -1;
     for (let index = opening + 1; index < markup.length; index += 1) {
       const character = markup[index]!;
-      if (quote !== undefined) {
-        if (character === quote) quote = undefined;
-        continue;
-      }
-      if (character === '"' || character === "'") {
-        quote = character;
-        continue;
-      }
-      if (character === '>') {
-        closing = index;
-        break;
-      }
+      if (quote !== undefined) { if (character === quote) quote = undefined; continue; }
+      if (character === '"' || character === "'") { quote = character; continue; }
+      if (character === '>') { closing = index; break; }
     }
     if (closing === -1) throw new Error(`UNTERMINATED_TAG_AT:${opening}`);
     const token = markup.slice(opening + 1, closing).trim();
-    if (token.startsWith('!') || token.startsWith('?')) {
-      cursor = closing + 1;
-      continue;
-    }
+    if (token.startsWith('!') || token.startsWith('?')) { cursor = closing + 1; continue; }
     const isClosing = token.startsWith('/');
     const isSelfClosing = token.endsWith('/');
     const nameSource = isClosing ? token.slice(1).trimStart() : token;
@@ -55,12 +38,16 @@ function assertStructurallyNested(markup: string): void {
       if (isSelfClosing) throw new Error(`INVALID_SELF_CLOSING_END_TAG:${name}`);
       const expected = stack.pop();
       if (expected !== name) throw new Error(`MISMATCHED_CLOSING_TAG:${name}:${expected ?? 'none'}`);
-    } else if (!isSelfClosing) {
-      stack.push(name);
-    }
+    } else if (!isSelfClosing) stack.push(name);
     cursor = closing + 1;
   }
   if (stack.length > 0) throw new Error(`UNCLOSED_TAGS:${stack.join(',')}`);
+}
+
+function svgGeometry(markup: string): { viewBox: number[]; paths: string[] } {
+  const viewBox = / viewBox="([^"]+)"/.exec(markup)?.[1]?.split(/\s+/u).map(Number) ?? [];
+  const paths = [...markup.matchAll(/<path [^>]* d="([^"]+)"[^>]*\/>/gu)].map((match) => match[1]!);
+  return { viewBox, paths };
 }
 
 test('structural nesting helper rejects crossed and missing closing tags', () => {
@@ -102,15 +89,22 @@ test('HTML fallback provides structurally nested node targets and linked relatio
   assertStructurallyNested(html);
 });
 
-test('SVG preserves descendant keyboard and screen-reader traversal semantics', () => {
+test('SVG preserves semantics and emits finite positive visible geometry deterministically', () => {
   const svg = project(scene, 'svg').content;
-  assert.match(svg, /^<svg role="group" aria-label="Academic knowledge universe">/);
+  assert.match(svg, /^<svg role="group" aria-label="Academic knowledge universe" viewBox="-1 -1 5 5" preserveAspectRatio="xMidYMid meet">/);
   assert.doesNotMatch(svg, /role="img"/);
   assert.match(svg, /role="list" aria-label="Knowledge nodes"/);
   assert.match(svg, /aria-label="1 of 2: A &lt;Program&gt; \(program\)"/);
   assert.match(svg, /aria-label="2 of 2: B &amp; Beyond \(course\)"/);
   assert.equal((svg.match(/tabindex="0"/g) ?? []).length, 2);
   assert.ok(svg.indexOf('data-node-id="node:a"') < svg.indexOf('data-node-id="node:b"'));
+  const geometry = svgGeometry(svg);
+  assert.equal(geometry.viewBox.length, 4);
+  assert.ok(geometry.viewBox.every(Number.isFinite));
+  assert.ok(geometry.viewBox[2]! > 0 && geometry.viewBox[3]! > 0);
+  assert.deepEqual(geometry.paths, ['M 1 1 L 2 2']);
+  assert.match(svg, /d="M 1 1 L 2 2" fill="none" stroke="#8ca2ff" stroke-width="0.08"/);
+  assert.equal(project(scene, 'svg').content, svg);
 });
 
 const escapeCases = [
@@ -118,11 +112,7 @@ const escapeCases = [
   { name: 'double quote', raw: '"', escaped: '&quot;' },
   { name: 'less-than', raw: '<', escaped: '&lt;' },
   { name: 'greater-than', raw: '>', escaped: '&gt;' },
-  {
-    name: 'combined attribute and element injection payload',
-    raw: '" onfocus="alert(1)"><script>alert(1)</script>&',
-    escaped: '&quot; onfocus=&quot;alert(1)&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;&amp;'
-  }
+  { name: 'combined attribute and element injection payload', raw: '" onfocus="alert(1)"><script>alert(1)</script>&', escaped: '&quot; onfocus=&quot;alert(1)&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;&amp;' }
 ] as const;
 
 for (const escapeCase of escapeCases) {
@@ -147,18 +137,15 @@ for (const escapeCase of escapeCases) {
       ],
       edges: [{ id: edgeId, semanticKind: edgeKind, source: nodeAId, target: nodeBId }]
     };
-
     const html = project(hostileScene, 'html').content;
     assert.ok(html.includes(`<a href="#${encodedNodeAId}" data-node-id="${encodedNodeAId}">${encodedNodeLabel}</a>`));
     assert.ok(html.includes(`<article id="${encodedNodeAId}" tabindex="-1" data-node-id="${encodedNodeAId}" data-semantic-kind="${encodedNodeKind}"><h2>${encodedNodeLabel}</h2><p>${encodedNodeKind}</p></article>`));
     assert.ok(html.includes(`<li data-edge-id="${encodedEdgeId}" data-semantic-kind="${encodedEdgeKind}"><a href="#${encodedNodeAId}">${encodedNodeAId}</a> → <a href="#${encodedNodeBId}">${encodedNodeBId}</a></li>`));
     assertStructurallyNested(html);
-
     const svg = project(hostileScene, 'svg').content;
     assert.ok(svg.includes(`<g id="${encodedNodeAId}" role="listitem" tabindex="0" data-node-id="${encodedNodeAId}" data-semantic-kind="${encodedNodeKind}" aria-label="1 of 2: ${encodedNodeLabel} (${encodedNodeKind})"><circle`));
     assert.ok(svg.includes(`<title>${encodedNodeLabel}</title></g>`));
-    assert.ok(svg.includes(`<path data-edge-id="${encodedEdgeId}" data-semantic-kind="${encodedEdgeKind}" data-source="${encodedNodeAId}" data-target="${encodedNodeBId}"/>`));
-
+    assert.ok(svg.includes(`<path data-edge-id="${encodedEdgeId}" data-semantic-kind="${encodedEdgeKind}" data-source="${encodedNodeAId}" data-target="${encodedNodeBId}" d="M 1 1 L 2 2" fill="none" stroke="#8ca2ff" stroke-width="0.08"/>`));
     for (const markup of [html, svg]) {
       assert.doesNotMatch(markup, /<script>/);
       assert.doesNotMatch(markup, /\sonfocus="alert\(1\)"/);
@@ -169,20 +156,17 @@ for (const escapeCase of escapeCases) {
 test('projection fails closed on duplicate node identifiers', () => {
   const duplicate = { ...scene, nodes: [scene.nodes[0]!, { ...scene.nodes[1]!, id: scene.nodes[0]!.id }] };
   assert.throws(() => project(duplicate, 'three'), (error: unknown) => {
-    assert.equal((error as Error).message, 'DUPLICATE_PROJECTION_NODE_ID:node:b');
-    return true;
+    assert.equal((error as Error).message, 'DUPLICATE_PROJECTION_NODE_ID:node:b'); return true;
   });
 });
 
 test('projection fails closed on duplicate or invalid focus order', () => {
   const duplicate = { ...scene, nodes: scene.nodes.map((node) => ({ ...node, focusOrder: 1 })) };
   assert.throws(() => project(duplicate, 'html'), (error: unknown) => {
-    assert.equal((error as Error).message, 'INVALID_PROJECTION_FOCUS_ORDER:node:a:1');
-    return true;
+    assert.equal((error as Error).message, 'INVALID_PROJECTION_FOCUS_ORDER:node:a:1'); return true;
   });
   const invalid = { ...scene, nodes: [{ ...scene.nodes[0]!, focusOrder: 0 }, scene.nodes[1]!] };
   assert.throws(() => project(invalid, 'svg'), (error: unknown) => {
-    assert.equal((error as Error).message, 'INVALID_PROJECTION_FOCUS_ORDER:node:b:0');
-    return true;
+    assert.equal((error as Error).message, 'INVALID_PROJECTION_FOCUS_ORDER:node:b:0'); return true;
   });
 });
