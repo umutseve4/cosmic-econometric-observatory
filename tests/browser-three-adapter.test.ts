@@ -15,7 +15,7 @@ const scene: SceneIR = {
 type FixtureOptions = { throwOnRender?: boolean; throwOnMaterial?: boolean; throwOnSetPoints?: boolean };
 
 function fixtureRuntime(options: FixtureOptions = {}) {
-  const counters = { renders: 0, rendererDisposals: 0, resourceDisposals: 0 };
+  const counters = { renders: 0, rendererDisposals: 0, resourceDisposals: 0, setSize: undefined as undefined | [number, number, boolean] };
   class Position { set(_x: number, _y: number, _z: number): void {} }
   class Object3D { name = ''; userData: Record<string, unknown> = {}; readonly position = new Position(); }
   class Scene { add(..._objects: Object3D[]): void {} }
@@ -31,7 +31,7 @@ function fixtureRuntime(options: FixtureOptions = {}) {
   class Renderer {
     constructor(_options: unknown) {}
     setPixelRatio(_value: number): void {}
-    setSize(_width: number, _height: number, _updateStyle: boolean): void {}
+    setSize(width: number, height: number, updateStyle: boolean): void { counters.setSize = [width, height, updateStyle]; }
     render(_scene: Scene, _camera: Camera): void { counters.renders += 1; if (options.throwOnRender) throw new Error('render-failed'); }
     dispose(): void { counters.rendererDisposals += 1; }
   }
@@ -75,6 +75,7 @@ test('prepares one deterministic rendered canvas and disposes transient GPU reso
   assert.equal(root?.dataset.nodeCount, '2');
   assert.equal(root?.dataset.edgeCount, '1');
   assert.equal(fixture.counters.renders, 1);
+  assert.deepEqual(fixture.counters.setSize, [960, 720, false]);
   assert.equal(fixture.counters.rendererDisposals, 1);
   assert.equal(fixture.counters.resourceDisposals, 6);
 });
