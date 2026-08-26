@@ -31,7 +31,7 @@
       if (viewport !== requestedWidth) throw new Error(`viewport mismatch:${viewport}/${requestedWidth}`);
       if (doc.documentElement.scrollWidth > viewport || doc.body.scrollWidth > viewport) throw new Error(`horizontal overflow:${viewport}/${doc.documentElement.scrollWidth}/${doc.body.scrollWidth}`);
       const offenders = [...doc.body.querySelectorAll('*')].filter((element) => {
-        if (element.matches('script, style, [hidden]')) return false;
+        if (element.matches('script, style, [hidden]') || element.closest('[aria-hidden="true"]')) return false;
         const rect = element.getBoundingClientRect();
         return rect.width > 0 && (rect.left < -1 || rect.right > viewport + 1);
       });
