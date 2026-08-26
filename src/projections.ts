@@ -43,13 +43,26 @@ export function project(scene: SceneIR, projection: ProjectionKind): ProjectionM
   }
 
   if (projection === 'svg') {
+    const padding = 2;
+    const xValues = focusOrderedNodes.map(({ position }) => position.x);
+    const yValues = focusOrderedNodes.map(({ position }) => position.z);
+    const minX = (xValues.length === 0 ? 0 : Math.min(...xValues)) - padding;
+    const minY = (yValues.length === 0 ? 0 : Math.min(...yValues)) - padding;
+    const maxX = (xValues.length === 0 ? 0 : Math.max(...xValues)) + padding;
+    const maxY = (yValues.length === 0 ? 0 : Math.max(...yValues)) + padding;
+    const viewBox = [minX, minY, Math.max(1, maxX - minX), Math.max(1, maxY - minY)].map(formatCoordinate).join(' ');
+    const positions = new Map(focusOrderedNodes.map((node) => [node.id, node.position]));
     const nodes = focusOrderedNodes.map((node, index) =>
-      `<g id="${escapeMarkup(node.id)}" role="listitem" tabindex="0" data-node-id="${escapeMarkup(node.id)}" data-semantic-kind="${escapeMarkup(node.semanticKind)}" aria-label="${index + 1} of ${focusOrderedNodes.length}: ${escapeMarkup(node.label)} (${escapeMarkup(node.semanticKind)})"><circle cx="${node.position.x}" cy="${node.position.z}" r="1"/><title>${escapeMarkup(node.label)}</title></g>`
+      `<g id="${escapeMarkup(node.id)}" role="listitem" tabindex="0" data-node-id="${escapeMarkup(node.id)}" data-semantic-kind="${escapeMarkup(node.semanticKind)}" aria-label="${index + 1} of ${focusOrderedNodes.length}: ${escapeMarkup(node.label)} (${escapeMarkup(node.semanticKind)})"><circle cx="${formatCoordinate(node.position.x)}" cy="${formatCoordinate(node.position.z)}" r="0.32" fill="#55d9e7"/><title>${escapeMarkup(node.label)}</title></g>`
     ).join('');
-    const edges = orderedEdges.map((edge) =>
-      `<path data-edge-id="${escapeMarkup(edge.id)}" data-semantic-kind="${escapeMarkup(edge.semanticKind)}" data-source="${escapeMarkup(edge.source)}" data-target="${escapeMarkup(edge.target)}"/>`
-    ).join('');
-    return { ...common, content: `<svg role="group" aria-label="Academic knowledge universe"><g role="list" aria-label="Knowledge nodes">${nodes}</g><g role="group" aria-label="Knowledge relations">${edges}</g></svg>` };
+    const edges = orderedEdges.map((edge) => {
+      const source = positions.get(edge.source);
+      const target = positions.get(edge.target);
+      if (source === undefined || target === undefined) throw new Error(`INVALID_PROJECTION_EDGE_ENDPOINT:${edge.id}`);
+      const path = `M ${formatCoordinate(source.x)} ${formatCoordinate(source.z)} L ${formatCoordinate(target.x)} ${formatCoordinate(target.z)}`;
+      return `<path data-edge-id="${escapeMarkup(edge.id)}" data-semantic-kind="${escapeMarkup(edge.semanticKind)}" data-source="${escapeMarkup(edge.source)}" data-target="${escapeMarkup(edge.target)}" d="${path}" fill="none" stroke="#8ca2ff" stroke-width="0.08"/>`;
+    }).join('');
+    return { ...common, content: `<svg role="group" aria-label="Academic knowledge universe" viewBox="${viewBox}" preserveAspectRatio="xMidYMid meet"><g role="group" aria-label="Knowledge relations">${edges}</g><g role="list" aria-label="Knowledge nodes">${nodes}</g></svg>` };
   }
 
   const navigation = focusOrderedNodes.map((node) =>
@@ -76,4 +89,5 @@ function validateAndOrderNodes(nodes: readonly SceneNode[]): SceneNode[] {
   return [...nodes].sort((a, b) => a.focusOrder - b.focusOrder || compareCodePoints(a.id, b.id));
 }
 function byId<T extends { id: string }>(left: T, right: T): number { return compareCodePoints(left.id, right.id); }
+function formatCoordinate(value: number): string { return Object.is(value, -0) ? '0' : String(value); }
 function escapeMarkup(value: string): string { return value.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;').replaceAll('>', '&gt;'); }
