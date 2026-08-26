@@ -1,0 +1,362 @@
+{
+  "schemaVersion": "1.0.0",
+  "sourceSha": "f7f1bf63ac2c153c8d3e63c89b1f488027523a43",
+  "generatedAtUtc": "2026-08-26T20:36:03.270Z",
+  "browserVersion": "Chrome/151.0.7922.173",
+  "canonicalCaseCount": 4,
+  "supportingFullPageCount": 4,
+  "cases": [
+    {
+      "id": "VA-M-D",
+      "sourceSha": "f7f1bf63ac2c153c8d3e63c89b1f488027523a43",
+      "route": "/index.html",
+      "finalUrl": "http://127.0.0.1:33817/index.html",
+      "httpStatus": 200,
+      "requestedMode": "default",
+      "observedMode": "three",
+      "viewport": {
+        "width": 390,
+        "height": 844,
+        "deviceScaleFactor": 1,
+        "mobile": true
+      },
+      "capturedAtUtc": "2026-08-26T20:35:57.678Z",
+      "browserVersion": "Chrome/151.0.7922.173",
+      "runtimeMarker": "M3G_SITE_SMOKE_PASS",
+      "document": {
+        "width": 390,
+        "height": 4193
+      },
+      "layout": {
+        "viewportFrame": {
+          "width": 370,
+          "height": 450
+        },
+        "heroBottom": 1670.21875,
+        "semanticTop": 1670.21875
+      },
+      "fonts": {
+        "status": "loaded",
+        "readyWithin10s": true,
+        "renderState": "fallback",
+        "requestedFamilies": [
+          {
+            "family": "DM Sans",
+            "faceCount": 8,
+            "statuses": [
+              "loaded",
+              "loaded",
+              "unloaded",
+              "unloaded",
+              "loaded",
+              "loaded",
+              "loaded",
+              "loaded"
+            ],
+            "checkResult": true
+          },
+          {
+            "family": "Libre Franklin",
+            "faceCount": 15,
+            "statuses": [
+              "unloaded",
+              "unloaded",
+              "unloaded",
+              "unloaded",
+              "unloaded",
+              "unloaded",
+              "unloaded",
+              "unloaded",
+              "unloaded",
+              "unloaded",
+              "unloaded",
+              "unloaded",
+              "unloaded",
+              "loaded",
+              "loaded"
+            ],
+            "checkResult": false
+          }
+        ],
+        "bodyFamily": "\"DM Sans\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+        "titleFamily": "\"Libre Franklin\", sans-serif"
+      },
+      "canonicalScreenshot": {
+        "file": "VA-M-D-viewport.png",
+        "sha256": "630e418319ba3b25a929045f4a0d91d979a13bc4c2b4f6f87d504afb71d94f7e",
+        "width": 390,
+        "height": 844
+      },
+      "supportingFullPageScreenshot": {
+        "file": "VA-M-D-full-page.png",
+        "sha256": "51216828b084dbb89b05fd5b84d3c7b5f6c9a95d439ae266e202671d8137a8f6",
+        "width": 390,
+        "height": 4193
+      }
+    },
+    {
+      "id": "VA-M-F",
+      "sourceSha": "f7f1bf63ac2c153c8d3e63c89b1f488027523a43",
+      "route": "/index.html?force-fallback=true",
+      "finalUrl": "http://127.0.0.1:33817/index.html?force-fallback=true",
+      "httpStatus": 200,
+      "requestedMode": "fallback",
+      "observedMode": "fallback",
+      "viewport": {
+        "width": 390,
+        "height": 844,
+        "deviceScaleFactor": 1,
+        "mobile": true
+      },
+      "capturedAtUtc": "2026-08-26T20:35:58.974Z",
+      "browserVersion": "Chrome/151.0.7922.173",
+      "runtimeMarker": "M3G_SITE_SMOKE_PASS",
+      "document": {
+        "width": 390,
+        "height": 4193
+      },
+      "layout": {
+        "viewportFrame": {
+          "width": 370,
+          "height": 450
+        },
+        "heroBottom": 1670.21875,
+        "semanticTop": 1670.21875
+      },
+      "fonts": {
+        "status": "loaded",
+        "readyWithin10s": true,
+        "renderState": "fallback",
+        "requestedFamilies": [
+          {
+            "family": "DM Sans",
+            "faceCount": 8,
+            "statuses": [
+              "loaded",
+              "loaded",
+              "unloaded",
+              "unloaded",
+              "loaded",
+              "loaded",
+              "loaded",
+              "loaded"
+            ],
+            "checkResult": true
+          },
+          {
+            "family": "Libre Franklin",
+            "faceCount": 15,
+            "statuses": [
+              "unloaded",
+              "unloaded",
+              "unloaded",
+              "unloaded",
+              "unloaded",
+              "unloaded",
+              "unloaded",
+              "unloaded",
+              "unloaded",
+              "unloaded",
+              "unloaded",
+              "unloaded",
+              "unloaded",
+              "loaded",
+              "loaded"
+            ],
+            "checkResult": false
+          }
+        ],
+        "bodyFamily": "\"DM Sans\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+        "titleFamily": "\"Libre Franklin\", sans-serif"
+      },
+      "canonicalScreenshot": {
+        "file": "VA-M-F-viewport.png",
+        "sha256": "1810cf0043628061de2fca76f9ad50524681965e4fca1ce371de66195fd95b55",
+        "width": 390,
+        "height": 844
+      },
+      "supportingFullPageScreenshot": {
+        "file": "VA-M-F-full-page.png",
+        "sha256": "85befdd0ac681aaf4297e11298353a0d1b8978ae2508c56c21fbc22c2b3b6435",
+        "width": 390,
+        "height": 4193
+      }
+    },
+    {
+      "id": "VA-D-D",
+      "sourceSha": "f7f1bf63ac2c153c8d3e63c89b1f488027523a43",
+      "route": "/index.html",
+      "finalUrl": "http://127.0.0.1:33817/index.html",
+      "httpStatus": 200,
+      "requestedMode": "default",
+      "observedMode": "three",
+      "viewport": {
+        "width": 1440,
+        "height": 900,
+        "deviceScaleFactor": 1,
+        "mobile": false
+      },
+      "capturedAtUtc": "2026-08-26T20:36:01.274Z",
+      "browserVersion": "Chrome/151.0.7922.173",
+      "runtimeMarker": "M3G_SITE_SMOKE_PASS",
+      "document": {
+        "width": 1425,
+        "height": 2759
+      },
+      "layout": {
+        "viewportFrame": {
+          "width": 734.625,
+          "height": 680
+        },
+        "heroBottom": 1049.390625,
+        "semanticTop": 1049.390625
+      },
+      "fonts": {
+        "status": "loaded",
+        "readyWithin10s": true,
+        "renderState": "fallback",
+        "requestedFamilies": [
+          {
+            "family": "DM Sans",
+            "faceCount": 8,
+            "statuses": [
+              "loaded",
+              "loaded",
+              "unloaded",
+              "unloaded",
+              "loaded",
+              "loaded",
+              "loaded",
+              "loaded"
+            ],
+            "checkResult": true
+          },
+          {
+            "family": "Libre Franklin",
+            "faceCount": 15,
+            "statuses": [
+              "unloaded",
+              "unloaded",
+              "unloaded",
+              "unloaded",
+              "unloaded",
+              "unloaded",
+              "unloaded",
+              "unloaded",
+              "unloaded",
+              "unloaded",
+              "unloaded",
+              "unloaded",
+              "unloaded",
+              "loaded",
+              "loaded"
+            ],
+            "checkResult": false
+          }
+        ],
+        "bodyFamily": "\"DM Sans\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+        "titleFamily": "\"Libre Franklin\", sans-serif"
+      },
+      "canonicalScreenshot": {
+        "file": "VA-D-D-viewport.png",
+        "sha256": "7655197083635fa69fada4f8c26be5ad35450b63e96ce5f32838aa70e9e709b5",
+        "width": 1440,
+        "height": 900
+      },
+      "supportingFullPageScreenshot": {
+        "file": "VA-D-D-full-page.png",
+        "sha256": "0cd8341fe38c38d21ebea184d5558dcc72ad69b78cfbf35aec9fba2b9e7b98e4",
+        "width": 1425,
+        "height": 2759
+      }
+    },
+    {
+      "id": "VA-D-F",
+      "sourceSha": "f7f1bf63ac2c153c8d3e63c89b1f488027523a43",
+      "route": "/index.html?force-fallback=true",
+      "finalUrl": "http://127.0.0.1:33817/index.html?force-fallback=true",
+      "httpStatus": 200,
+      "requestedMode": "fallback",
+      "observedMode": "fallback",
+      "viewport": {
+        "width": 1440,
+        "height": 900,
+        "deviceScaleFactor": 1,
+        "mobile": false
+      },
+      "capturedAtUtc": "2026-08-26T20:36:03.267Z",
+      "browserVersion": "Chrome/151.0.7922.173",
+      "runtimeMarker": "M3G_SITE_SMOKE_PASS",
+      "document": {
+        "width": 1425,
+        "height": 2759
+      },
+      "layout": {
+        "viewportFrame": {
+          "width": 734.625,
+          "height": 680
+        },
+        "heroBottom": 1049.390625,
+        "semanticTop": 1049.390625
+      },
+      "fonts": {
+        "status": "loaded",
+        "readyWithin10s": true,
+        "renderState": "fallback",
+        "requestedFamilies": [
+          {
+            "family": "DM Sans",
+            "faceCount": 8,
+            "statuses": [
+              "loaded",
+              "loaded",
+              "unloaded",
+              "unloaded",
+              "loaded",
+              "loaded",
+              "loaded",
+              "loaded"
+            ],
+            "checkResult": true
+          },
+          {
+            "family": "Libre Franklin",
+            "faceCount": 15,
+            "statuses": [
+              "unloaded",
+              "unloaded",
+              "unloaded",
+              "unloaded",
+              "unloaded",
+              "unloaded",
+              "unloaded",
+              "unloaded",
+              "unloaded",
+              "unloaded",
+              "unloaded",
+              "unloaded",
+              "unloaded",
+              "loaded",
+              "loaded"
+            ],
+            "checkResult": false
+          }
+        ],
+        "bodyFamily": "\"DM Sans\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+        "titleFamily": "\"Libre Franklin\", sans-serif"
+      },
+      "canonicalScreenshot": {
+        "file": "VA-D-F-viewport.png",
+        "sha256": "3f4dd5da1ea4cf6865e29a765f571f6bfb1e4bb4f2296a1e289d5a5783abbfa9",
+        "width": 1440,
+        "height": 900
+      },
+      "supportingFullPageScreenshot": {
+        "file": "VA-D-F-full-page.png",
+        "sha256": "93f674fef0c227ce07481db07ff68a461bb6452612125823891eba2df123de87",
+        "width": 1425,
+        "height": 2759
+      }
+    }
+  ]
+}

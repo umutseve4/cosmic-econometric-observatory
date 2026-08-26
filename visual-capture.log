@@ -1,0 +1,5 @@
+
+> @ceo/world-engine@0.0.0 capture:visual-acceptance
+> node scripts/capture-visual-acceptance.mjs
+
+VISUAL_ACCEPTANCE_EVIDENCE_PASS:f7f1bf63ac2c153c8d3e63c89b1f488027523a43:4/4
