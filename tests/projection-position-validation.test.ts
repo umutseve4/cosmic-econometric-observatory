@@ -15,11 +15,13 @@ const scene: SceneIR = {
   edges: []
 };
 
-for (const [projection, axis, value] of [
+const invalidPositions = [
   ['three', 'x', Number.NaN],
   ['svg', 'y', Number.POSITIVE_INFINITY],
   ['html', 'z', Number.NEGATIVE_INFINITY]
-] as const satisfies readonly [ProjectionKind, 'x' | 'y' | 'z', number][]) {
+] as const satisfies ReadonlyArray<readonly [ProjectionKind, 'x' | 'y' | 'z', number]>;
+
+for (const [projection, axis, value] of invalidPositions) {
   test(`${projection} projection rejects non-finite ${axis} position`, () => {
     const invalid: SceneIR = {
       ...scene,
