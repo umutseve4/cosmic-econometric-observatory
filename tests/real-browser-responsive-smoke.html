@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Responsive product acceptance smoke</title>
+  <style>
+    html, body { margin: 0; min-height: 100%; }
+    iframe { display: block; height: 10000px; border: 0; }
+    #result { position: fixed; inset: auto 0 0; margin: 0; padding: 4px; background: #fff; color: #000; z-index: 9999; }
+  </style>
+</head>
+<body>
+  <iframe id="site" title="Kozmik Ekonometri responsive test"></iframe>
+  <pre id="result">RESPONSIVE_PRODUCT_SMOKE_RUNNING</pre>
+  <script>
+    const PASS = 'RESPONSIVE_PRODUCT_SMOKE_PASS';
+    const FAIL = 'RESPONSIVE_PRODUCT_SMOKE_FAIL';
+    const result = document.querySelector('#result');
+    const frame = document.querySelector('#site');
+    const params = new URL(location.href).searchParams;
+    const requestedWidth = Number(params.get('width'));
+    const mode = params.get('mode');
+    const englishLeak = /(^|[^\p{L}\p{N}])(academic knowledge universe|knowledge node details|knowledge relations|knowledge nodes|relations|university|department|faculty|institution|curriculum|course|source|program|selected node|root node|child of|contains|belongs to)(?=$|[^\p{L}\p{N}])/iu;
+    const englishLeakSamples = [
+      'Academic knowledge universe', 'Knowledge node details', 'Knowledge relations', 'Knowledge nodes', 'Relations',
+      'University', 'Department', 'Faculty', 'institution', 'curriculum', 'course', 'source', 'program',
+      'selected node', 'root node', 'child of', 'contains', 'belongs to'
+    ];
+    if (englishLeakSamples.some((sample) => !englishLeak.test(sample))) throw new Error('English leak oracle coverage drift');
+    if (englishLeak.test('lisans programı')) throw new Error('English leak oracle Turkish false positive');
+    if (!Number.isInteger(requestedWidth) || requestedWidth < 240 || requestedWidth > 2000) throw new Error('invalid requested width');
+    if (mode !== 'default' && mode !== 'fallback') throw new Error('invalid render mode');
+    frame.style.width = `${requestedWidth}px`;
+
+    function fail(message) { result.textContent = `${FAIL}:${message}`; }
+    function describedText(doc, element) {
+      const ids = (element.getAttribute('aria-describedby') || '').trim().split(/\s+/u).filter(Boolean);
+      return ids.map((id) => doc.getElementById(id)?.textContent || '').join(' ');
+    }
+    function inspect() {
+      const doc = frame.contentDocument;
+      if (!frame.contentWindow || !doc) throw new Error('iframe unavailable');
+      const viewport = doc.documentElement.clientWidth;
+      if (viewport !== requestedWidth) throw new Error(`viewport mismatch:${viewport}/${requestedWidth}`);
+      if (doc.documentElement.scrollWidth > viewport || doc.body.scrollWidth > viewport) throw new Error(`horizontal overflow:${viewport}/${doc.documentElement.scrollWidth}/${doc.body.scrollWidth}`);
+      const offenders = [...doc.body.querySelectorAll('*')].filter((element) => {
+        if (element.matches('script, style, [hidden], .ambient-one, .ambient-two')) return false;
+        const style = frame.contentWindow.getComputedStyle(element);
+        if (style.display === 'none' || style.visibility === 'hidden') return false;
+        const rect = element.getBoundingClientRect();
+        return rect.width > 0 && (rect.left < -1 || rect.right > viewport + 1);
+      });
+      if (offenders.length > 0) throw new Error(`clipped elements:${offenders.slice(0, 5).map((element) => element.id || element.className || element.tagName).join(',')}`);
+      const roots = ['#webgl-universe', '#html-universe'].map((selector) => doc.querySelector(selector)).filter(Boolean);
+      const surfaces = roots.flatMap((root) => {
+        const elements = [root, ...root.querySelectorAll('*')];
+        return elements.flatMap((element) => [
+          element === root ? root.textContent || '' : '',
+          element.getAttribute?.('aria-label') || '', element.getAttribute?.('title') || '',
+          element.getAttribute?.('alt') || '', element.getAttribute?.('placeholder') || '',
+          element.getAttribute?.('value') || '', element.getAttribute?.('aria-description') || '',
+          describedText(doc, element), element.matches?.('svg title') ? element.textContent || '' : ''
+        ]);
+      });
+      const leak = surfaces.find((value) => englishLeak.test(value));
+      if (leak) throw new Error(`English accessible-name leak:${leak.slice(0, 80)}`);
+      const visual = doc.querySelector('#webgl-universe');
+      const renderMode = visual?.dataset.renderMode;
+      if (mode === 'default' && renderMode !== 'three') throw new Error(`default render mode:${renderMode || 'missing'}`);
+      if (mode === 'fallback' && (renderMode !== 'fallback' || visual.querySelector('svg') === null)) throw new Error(`fallback render mode:${renderMode || 'missing'}`);
+      const runtime = doc.querySelector('#result')?.textContent?.trim();
+      if (runtime !== 'M3G_SITE_SMOKE_PASS') throw new Error(`runtime marker:${runtime || 'missing'}`);
+      result.textContent = PASS;
+    }
+
+    frame.addEventListener('load', () => {
+      const deadline = Date.now() + 20_000;
+      const poll = () => {
+        try {
+          const runtime = frame.contentDocument?.querySelector('#result')?.textContent?.trim() || '';
+          if (runtime === 'M3G_SITE_SMOKE_PASS') { inspect(); return; }
+          if (runtime.startsWith('M3G_SITE_SMOKE_FAIL')) { fail(runtime); return; }
+          if (Date.now() >= deadline) { fail(`timeout:${runtime || 'missing'}`); return; }
+          setTimeout(poll, 50);
+        } catch (error) { fail(error instanceof Error ? error.message : String(error)); }
+      };
+      poll();
+    }, { once: true });
+    frame.addEventListener('error', () => fail('iframe load error'), { once: true });
+    frame.src = `/dist-site/index.html?responsive-smoke=1${mode === 'fallback' ? '&force-fallback=true' : ''}`;
+  </script>
+</body>
+</html>

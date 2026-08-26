@@ -10,7 +10,7 @@
     "build:site": "npm run build && node scripts/build-site.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "npm run build && node --test dist/tests/*.test.js tests/*.test.mjs",
-    "test:browser-smoke": "node scripts/run-real-browser-smoke.mjs",
+    "test:browser-smoke": "node scripts/run-real-browser-smoke.mjs && node scripts/run-responsive-browser-smoke.mjs",
     "test:site-negative": "node scripts/test-site-negative.mjs",
     "verify:site": "npm run build:site && npm run test:site-negative && node scripts/verify-site.mjs",
     "verify": "npm run typecheck && npm test && npm run verify:site"
