@@ -33,8 +33,8 @@ const server = createServer((request, response) => {
 const timeoutMs = 60_000; const shutdownGraceMs = 2_000;
 
 async function runWidth(width, port) {
-  const url = `http://127.0.0.1:${port}/tests/real-browser-responsive-smoke.html`;
-  const browser = spawn(chrome, ['--headless=new', '--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', `--window-size=${width},1000`, '--dump-dom', url], {
+  const url = `http://127.0.0.1:${port}/tests/real-browser-responsive-smoke.html?width=${width}`;
+  const browser = spawn(chrome, ['--headless=new', '--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', `--window-size=${Math.max(width, 500)},1000`, '--dump-dom', url], {
     stdio: ['ignore', 'pipe', 'pipe'], detached: usesDetachedProcessGroup
   });
   let stdout = ''; let stderr = '';
