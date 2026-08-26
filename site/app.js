@@ -78,7 +78,7 @@ function runM3iSmoke({ htmlTarget, visualTarget, visualReceipt, controller, comm
     const targets = [...root.querySelectorAll(selector)]; const first = targets[0]; const second = targets[1]; if (!first || !second || !first.parentNode || !second.parentNode) throw new Error(`missing ${label} targets`);
     const clone = first.cloneNode(true); expectRejectedWithoutCommit(root, () => first.parentNode.insertBefore(clone, first.nextSibling), () => clone.remove(), `${label}:insert`);
     const restoreRemoval = capturePosition(first); expectRejectedWithoutCommit(root, () => first.remove(), restoreRemoval, `${label}:remove`);
-    const restoreReorder = capturePosition(first); expectRejectedWithoutCommit(root, () => second.parentNode.insertBefore(second, first), restoreReorder, `${label}:reorder`);
+    const restoreReorder = capturePosition(second); expectRejectedWithoutCommit(root, () => first.parentNode.insertBefore(second, first), restoreReorder, `${label}:reorder`);
     const restoreMembership = membership(first); expectRejectedWithoutCommit(root, restoreMembership.mutate, restoreMembership.restore, `${label}:selector-membership`);
     const originalId = second.getAttribute('data-node-id'); if (originalId === null) throw new Error(`missing ${label} ID`);
     expectRejectedWithoutCommit(root, () => second.setAttribute('data-node-id', 'node:tampered'), () => second.setAttribute('data-node-id', originalId), `${label}:id`);
