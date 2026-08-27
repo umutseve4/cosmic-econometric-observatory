@@ -64,6 +64,8 @@ jobs:
     permissions:
       pages: write
       id-token: write
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -71,3 +73,24 @@ jobs:
       - name: Deploy exact uploaded artifact
         id: deployment
         uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128
+
+  verify-production:
+    if: github.ref == 'refs/heads/main'
+    needs: deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out exact deployed source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '22'
+      - name: Verify live provenance, parity, and canonical browsers
+        run: npm run verify:production
+        env:
+          SITE_URL: ${{ needs.deploy.outputs.page_url }}
+          EXPECTED_SOURCE_SHA: ${{ github.sha }}
