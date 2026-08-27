@@ -7,14 +7,19 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
-      - name: Check out source
+      - name: Check out exact source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ env.SOURCE_SHA }}
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
@@ -40,6 +45,32 @@ jobs:
         run: npm run test:browser-smoke
       - name: Run real-browser smoke suite
         run: npm run test:browser-smoke
+      - name: Capture four-state visual acceptance evidence
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run capture:visual-acceptance 2>&1 | tee visual-capture.log
+      - name: Preserve visual evidence and diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: cosmic-visual-acceptance-${{ env.SOURCE_SHA }}
+          path: |
+            visual-acceptance-evidence/
+            visual-capture.log
+          if-no-files-found: warn
+          compression-level: 0
+          retention-days: 30
+      - name: Report visual-capture failure on the pull request
+        if: ${{ failure() && github.event_name == 'pull_request' && hashFiles('visual-capture.log') != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        shell: bash
+        run: |
+          tail -c 6000 visual-capture.log > visual-capture-tail.log
+          body=$(printf 'Visual evidence capture failed on exact source `%s` in run `%s`.\n\n```text\n%s\n```' "$SOURCE_SHA" "$GITHUB_RUN_ID" "$(cat visual-capture-tail.log)")
+          gh api "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" --raw-field body="$body"
       - name: Verify production dependency tree
         run: npm ls --omit=dev --depth=0
       - name: Capture artifact digest
@@ -49,9 +80,46 @@ jobs:
       - name: Upload immutable static artifact
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
-          name: cosmic-site-${{ github.sha }}
+          name: cosmic-site-${{ env.SOURCE_SHA }}
           path: dist-site/
           if-no-files-found: error
           compression-level: 0
       - name: Report artifact provenance
-        run: echo "source=${{ github.sha }} manifest_sha256=${{ steps.artifact.outputs.digest }}"
+        run: echo "source=${{ env.SOURCE_SHA }} manifest_sha256=${{ steps.artifact.outputs.digest }}"
+
+  publish-visual-evidence:
+    name: publish-visual-evidence
+    needs: verify
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'feat/professional-visual-redesign' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    permissions:
+      actions: read
+      contents: write
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Download exact-head visual artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run download "$GITHUB_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "cosmic-visual-acceptance-$SOURCE_SHA" \
+            --dir evidence
+          test "$(find evidence/visual-acceptance-evidence -maxdepth 1 -type f -name '*.png' | wc -l)" -eq 8
+      - name: Publish immutable review branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd evidence
+          git init
+          git checkout -b "visual-evidence/pr-34/$SOURCE_SHA"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add visual-acceptance-evidence visual-capture.log
+          git commit -m "docs: publish PR 34 visual evidence for $SOURCE_SHA"
+          git push --force \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "HEAD:refs/heads/visual-evidence/pr-34/$SOURCE_SHA"

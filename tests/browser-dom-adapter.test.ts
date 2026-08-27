@@ -55,15 +55,25 @@ function htmlRoots(): FakeNode[] {
   return [nav, main, section];
 }
 function svgRoots(): FakeNode[] {
-  return [e('svg', S, { role: 'group', 'aria-label': 'Academic knowledge universe' }, [
-    e('g', S, { role: 'list', 'aria-label': 'Knowledge nodes' }, [
-      e('g', S, { id: 'node:a', role: 'listitem', tabindex: '0', 'data-node-id': 'node:a', 'data-semantic-kind': 'program', 'aria-label': '1 of 2: A (program)' }, [e('circle', S, { cx: '1', cy: '1', r: '1' }), e('title', S, {}, [t('A')])]),
-      e('g', S, { id: 'node:b', role: 'listitem', tabindex: '0', 'data-node-id': 'node:b', 'data-semantic-kind': 'course', 'aria-label': '2 of 2: B (course)' }, [e('circle', S, { cx: '2', cy: '2', r: '1' }), e('title', S, {}, [t('B')])])
-    ]),
+  return [e('svg', S, { role: 'group', 'aria-label': 'Academic knowledge universe', viewBox: '-1 -1 5 5', preserveAspectRatio: 'xMidYMid meet' }, [
     e('g', S, { role: 'group', 'aria-label': 'Knowledge relations' }, [
-      e('path', S, { 'data-edge-id': 'edge:a-b', 'data-semantic-kind': 'CONTAINS', 'data-source': 'node:a', 'data-target': 'node:b' })
+      e('path', S, { 'data-edge-id': 'edge:a-b', 'data-semantic-kind': 'CONTAINS', 'data-source': 'node:a', 'data-target': 'node:b', d: 'M 1 1 L 2 2', fill: 'none', stroke: '#8ca2ff', 'stroke-width': '0.08' })
+    ]),
+    e('g', S, { role: 'list', 'aria-label': 'Knowledge nodes' }, [
+      e('g', S, { id: 'node:a', role: 'listitem', tabindex: '0', 'data-node-id': 'node:a', 'data-semantic-kind': 'program', 'aria-label': '1 of 2: A (program)' }, [e('circle', S, { cx: '1', cy: '1', r: '1', fill: '#55d9e7' }), e('title', S, {}, [t('A')])]),
+      e('g', S, { id: 'node:b', role: 'listitem', tabindex: '0', 'data-node-id': 'node:b', 'data-semantic-kind': 'course', 'aria-label': '2 of 2: B (course)' }, [e('circle', S, { cx: '2', cy: '2', r: '1', fill: '#55d9e7' }), e('title', S, {}, [t('B')])])
     ])
   ])];
+}
+function svgGroupByRole(svg: FakeElement, role: 'list' | 'group'): FakeElement {
+  const matches = svg.childNodes.filter((node): node is FakeElement => node instanceof FakeElement && node.localName === 'g' && node.getAttribute('role') === role);
+  assert.equal(matches.length, 1);
+  return matches[0]!;
+}
+function firstNodeCircle(roots: FakeNode[]): { node: FakeElement; circle: FakeElement } {
+  const svg = roots[0] as FakeElement;
+  const node = svgGroupByRole(svg, 'list').childNodes[0] as FakeElement;
+  return { node, circle: node.childNodes[0] as FakeElement };
 }
 
 const scene: SceneIR = {
@@ -89,6 +99,17 @@ for (const [kind, roots] of [['html', htmlRoots], ['svg', svgRoots]] as const) {
   });
 }
 
+test('accepts reversed SVG group order by resolving groups from roles', () => {
+  const roots = svgRoots();
+  const svg = roots[0] as FakeElement;
+  svg.childNodes.reverse();
+  const calls: Node[][] = [];
+  const receipt = renderProjection(project(scene, 'svg'), { replaceChildren(...nodes) { calls.push(nodes); } }, { dom: createBrowserDomPort(fakeDocument(roots)) });
+  assert.equal(calls.length, 1);
+  assert.deepEqual(receipt.nodeIds, ['node:a', 'node:b']);
+  assert.deepEqual(receipt.edgeIds, ['edge:a-b']);
+});
+
 test('rejects event attributes through the redacted preparation boundary without target mutation', () => {
   const roots = htmlRoots();
   const article = ((roots[1] as FakeElement).childNodes[0] as FakeElement);
@@ -108,18 +129,31 @@ test('rejects external navigation links without target mutation', () => {
 test('rejects dangling SVG endpoints without target mutation', () => {
   const roots = svgRoots();
   const svg = roots[0] as FakeElement;
-  const edgeGroup = svg.childNodes[1] as FakeElement;
-  edgeGroup.childNodes[0] = e('path', S, { 'data-edge-id': 'edge:a-b', 'data-semantic-kind': 'CONTAINS', 'data-source': 'node:a', 'data-target': 'node:missing' });
+  const edgeGroup = svgGroupByRole(svg, 'group');
+  edgeGroup.childNodes[0] = e('path', S, { 'data-edge-id': 'edge:a-b', 'data-semantic-kind': 'CONTAINS', 'data-source': 'node:a', 'data-target': 'node:missing', d: 'M 1 1 L 2 2', fill: 'none', stroke: '#8ca2ff', 'stroke-width': '0.08' });
   assertRedacted(project(scene, 'svg'), roots, 'BROWSER_DOM_INVALID_CONTENT:svg:edge-endpoint');
 });
 
 test('rejects foreign namespaces without target mutation', () => {
   const roots = svgRoots();
   const svg = roots[0] as FakeElement;
-  const nodeGroup = svg.childNodes[0] as FakeElement;
+  const nodeGroup = svgGroupByRole(svg, 'list');
   nodeGroup.childNodes.push(e('foreignObject', H));
   assertRedacted(project(scene, 'svg'), roots, 'BROWSER_DOM_INVALID_CONTENT:svg:namespace');
 });
+
+for (const [label, attributes] of [
+  ['missing', { cx: '1', cy: '1', r: '1' }],
+  ['wrong', { cx: '1', cy: '1', r: '1', fill: '#000000' }],
+  ['extra', { cx: '1', cy: '1', r: '1', fill: '#55d9e7', stroke: '#8ca2ff' }]
+] as const) {
+  test(`rejects ${label} SVG node circle fill without target mutation`, () => {
+    const roots = svgRoots();
+    const { node, circle } = firstNodeCircle(roots);
+    node.childNodes[0] = e('circle', S, attributes, circle.childNodes);
+    assertRedacted(project(scene, 'svg'), roots, 'BROWSER_DOM_INVALID_CONTENT:svg:node-circle');
+  });
+}
 
 function assertRedacted(manifest: ProjectionManifestV2, roots: FakeNode[], causeMessage: string): void {
   let calls = 0;

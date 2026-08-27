@@ -42,7 +42,7 @@ try {
   assert(receipt.committedRootCount === 1, 'three receipt root count');
   assert(canvas?.dataset.frame === 'rendered', 'one frame was not rendered');
   assert(canvas?.dataset.nodeCount === '2' && canvas?.dataset.edgeCount === '1', 'semantic object counts');
-  assert(canvas?.width === 320 && canvas?.height === 240, 'deterministic canvas size');
+  assert(canvas?.width === 960 && canvas?.height === 720, 'deterministic canvas size');
   const context = canvas.getContext('webgl2') ?? canvas.getContext('webgl');
   assert(context !== null && !context.isContextLost(), 'WebGL context unavailable or lost');
   assert(context.getError() === context.NO_ERROR, 'WebGL error after frame');

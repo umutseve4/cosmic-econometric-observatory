@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Production DOM adapter smoke</title></head>
+<body>
+  <div id="target"><span id="sentinel">unchanged</span></div>
+  <pre id="result">RUNNING</pre>
+  <script type="module">
+    import { createBrowserDomPort } from '../dist-site/modules/browser-dom-adapter.js';
+
+    const result = document.querySelector('#result');
+    const target = document.querySelector('#target');
+    const initial = target.innerHTML;
+    try {
+      const port = createBrowserDomPort(document);
+      const cases = [
+        ['html', '<article id="first" ID="second"></article>'],
+        ['svg', '<svg viewBox="0 0 10 10" VIEWBOX="0 0 20 20"></svg>']
+      ];
+      for (const [kind, content] of cases) {
+        let error;
+        try {
+          if (kind === 'html') port.prepareHtml(content);
+          else port.prepareSvg(content);
+        } catch (value) {
+          error = value;
+        }
+        const expected = `BROWSER_DOM_INVALID_CONTENT:${kind}:attribute`;
+        if (!(error instanceof Error) || error.message !== expected) {
+          throw new Error(`EXPECTED_SOURCE_REJECTION:${kind}:${error instanceof Error ? error.message : String(error)}`);
+        }
+        if (target.innerHTML !== initial) throw new Error(`TARGET_MUTATED:${kind}`);
+      }
+      result.textContent = 'M3J_PRODUCTION_DOM_SMOKE_PASS';
+    } catch (error) {
+      result.textContent = `M3J_PRODUCTION_DOM_SMOKE_FAIL:${error instanceof Error ? error.message : String(error)}`;
+    }
+  </script>
+</body>
+</html>
