@@ -140,12 +140,19 @@ async function waitForDevtools(port) {
   });
 }
 
+function hasChromeStopped(chrome) {
+  return chrome.exitCode !== null || chrome.signalCode !== null;
+}
+
 async function stopChrome(chrome) {
-  if (chrome.exitCode !== null) return;
+  if (hasChromeStopped(chrome)) return;
   chrome.kill('SIGTERM');
   await Promise.race([once(chrome, 'exit'), sleep(5_000)]);
-  if (chrome.exitCode === null) { chrome.kill('SIGKILL'); await Promise.race([once(chrome, 'exit'), sleep(2_000)]); }
-  assert(chrome.exitCode !== null, 'CHROME_CLEANUP_TIMEOUT');
+  if (!hasChromeStopped(chrome)) {
+    chrome.kill('SIGKILL');
+    await Promise.race([once(chrome, 'exit'), sleep(2_000)]);
+  }
+  assert(hasChromeStopped(chrome), 'CHROME_CLEANUP_TIMEOUT');
 }
 
 async function runBrowserCase(siteUrl, testCase, port) {
