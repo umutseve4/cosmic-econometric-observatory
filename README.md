@@ -79,7 +79,15 @@ M3f adds an exact-pinned `three@0.185.1` adapter without claiming a production r
 - The canvas is `aria-hidden="true"`; accessible semantics remain the responsibility of the equivalent HTML/SVG surfaces.
 - A real Chromium/SwiftShader smoke verifies `2` nodes, `1` edge, WebGL context health, `NO_ERROR`, forced-renderer rejection and `0` target mounts on preparation failure.
 
-This is intentionally not a continuous render loop, camera controls, picking, responsive application shell, cross-browser/assistive-technology conformance, or deployment.
+## M3g–M3i — Bounded browser and production closure
+
+- The production browser bridge, deterministic fallback orchestration, bounded keyboard node selection, and responsive application shell are implemented and tested.
+- GitHub Pages build, deploy, exact-source artifact parity, and four canonical production-browser cases passed at exact merge SHA `a01ef2ef06fb820dc60c67a31beda1fb306a1bf0`.
+- Canonical visual acceptance is `4/4`, responsive acceptance is `10/10`, and the bounded rubric result is `40/40`.
+- Visual CI uses an intentional deterministic `system-fallback` font policy; issue #36 was closed by PR #45.
+- Repository-wide enumeration after that closure returned exactly `0` open issues.
+
+Full M3 remains open. Continuous rendering, camera and pointer interaction, broad cross-browser and assistive-technology certification, production-scale performance, disposal-throw resilience, and continuously current public provenance availability are not claimed. The exact-merge Pages result is point-in-time evidence, not universal production-readiness certification.
 
 ## Verify
 

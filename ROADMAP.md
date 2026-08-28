@@ -73,19 +73,25 @@
 - Node and real Chromium/SwiftShader tests cover success, forced WebGL failure, semantic drift, malformed manifests/content and target collision behavior.
 - Verified at squash merge `38e8314978ef87d7c962c36f6161580d4c6e9f90` with exact-main [`verify` check run `98129078877`](https://api.github.com/repos/umutseve4/cosmic-econometric-observatory/check-runs/98129078877), suite `89262843081`, completed successfully from `2026-08-26T09:28:44Z` to `2026-08-26T09:29:19Z`, and independent exact-head QA PASS with CRITICAL/HIGH/MEDIUM/LOW findings `0/0/0/0`.
 
-### M3i — Deterministic keyboard node selection (in progress)
+### M3i — Deterministic keyboard node selection (Verified, bounded)
 - Keep selection identity as a persistent node ID owned by one controller shared across semantic projections.
 - Accept `Enter` and `Space` selection plus `Escape` clear; repeated, unknown, duplicate and stale inputs produce exactly `0` logical commits, while a real state transition produces exactly `1`.
 - Bind only validated HTML navigation and SVG fallback targets; keep the Three canvas decorative and `aria-hidden="true"`.
-- Require Node adversarial coverage and real Chromium evidence for SwiftShader Three and forced-no-WebGL SVG fallback paths before verification closure.
-- This slice does not claim camera controls, pointer picking, continuous rendering, cross-browser or assistive-technology conformance, deployment, or production readiness.
+- Node adversarial coverage and real Chromium evidence cover SwiftShader Three and forced-no-WebGL SVG fallback paths.
+- Subsequent bounded work verified the responsive application shell, GitHub Pages deployment, production artifact parity, canonical visual states and deterministic visual-CI font evidence.
+- Issue #36 was closed by PR #45 at squash merge `a01ef2ef06fb820dc60c67a31beda1fb306a1bf0`; the repository then had exactly `0` open issues.
+- Exact-merge CI run `33170910496`: `verify` job `98847562728` succeeded; policy-gated `publish-visual-evidence` job `98847830103` was skipped as designed.
+- Exact-merge Pages run `33170910481`: `build` job `98847562408`, `deploy` job `98847783737`, and `verify-production` job `98847836213` all succeeded.
+- Canonical visual acceptance is `4/4`, responsive acceptance is `10/10`, and the bounded rubric result is `40/40`.
+- This closure does not claim camera controls, pointer picking, continuous rendering, broad cross-browser or assistive-technology conformance, production-scale performance, disposal-throw resilience, continuously current public provenance availability, or universal production readiness.
 
 ### Deferred M3 slices
-- Continuous rendering, camera and pointer interaction, responsive application shell, cross-browser and assistive-technology validation, production-scale performance, disposal-throw resilience, and deployment remain deferred.
+- Continuous rendering, camera and pointer interaction, broad cross-browser and assistive-technology validation, production-scale performance, disposal-throw resilience, and continuous monitoring/revalidation of current public provenance availability remain deferred.
 
 ### M3 exit
 - WebGL/Three.js renderer, SVG/HTML parity and screen-reader traversal.
 - Semantic node/edge sets match across projections; fallback is fully usable.
+- Full M3 remains open until the deferred capabilities selected for the exit are explicitly implemented and verified; bounded M3i closure is not full-M3 certification.
 
 ## M4 — RASAT protocol
 - Allow-listed, schema-validated scene commands and evidence orchestration.
