@@ -20,6 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      issues: write
     steps:
       - name: Check out exact deployed source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -49,3 +50,16 @@ jobs:
           path: public-provenance-continuity.log
           if-no-files-found: error
           retention-days: 30
+      - name: Reopen continuity checkpoint on failure
+        if: ${{ failure() }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SOURCE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          set -euo pipefail
+          issue_state="$(gh api "repos/${GITHUB_REPOSITORY}/issues/47" --jq .state)"
+          if [[ "$issue_state" == "closed" ]]; then
+            gh issue reopen 47 --repo "$GITHUB_REPOSITORY"
+            gh issue comment 47 --repo "$GITHUB_REPOSITORY" --body "Automated fail-closed checkpoint: public provenance continuity failed for expected source \`${EXPECTED_SOURCE_SHA}\` in run \`${GITHUB_RUN_ID}\`. Exact logs are retained in the run artifact for 30 days. Historical deployment-time evidence is unchanged; current continuity must be re-established before this issue closes."
+          fi
