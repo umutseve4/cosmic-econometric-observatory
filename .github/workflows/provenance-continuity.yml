@@ -35,7 +35,9 @@ jobs:
         run: sleep 120
       - name: Verify public provenance continuity
         shell: bash
-        run: npm run verify:provenance-continuity 2>&1 | tee public-provenance-continuity.log
+        run: |
+          set -o pipefail
+          npm run verify:provenance-continuity 2>&1 | tee public-provenance-continuity.log
         env:
           SITE_URL: https://umutseve4.github.io/cosmic-econometric-observatory/
           EXPECTED_SOURCE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
