@@ -90,7 +90,18 @@ jobs:
         with:
           node-version: '22'
       - name: Verify live provenance, parity, and canonical browsers
-        run: npm run verify:production
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            echo "Production acceptance attempt ${attempt}/3"
+            if npm run verify:production; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              sleep $((attempt * 15))
+            fi
+          done
+          exit 1
         env:
           SITE_URL: ${{ needs.deploy.outputs.page_url }}
           EXPECTED_SOURCE_SHA: ${{ github.sha }}
