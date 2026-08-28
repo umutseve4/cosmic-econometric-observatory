@@ -80,6 +80,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      issues: write
     steps:
       - name: Check out exact deployed source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -90,11 +91,14 @@ jobs:
         with:
           node-version: '22'
       - name: Verify live provenance, parity, and canonical browsers
+        id: production_acceptance
         shell: bash
         run: |
+          set -o pipefail
+          : > production-acceptance.log
           for attempt in 1 2 3; do
-            echo "Production acceptance attempt ${attempt}/3"
-            if npm run verify:production; then
+            echo "Production acceptance attempt ${attempt}/3" | tee -a production-acceptance.log
+            if npm run verify:production 2>&1 | tee -a production-acceptance.log; then
               exit 0
             fi
             if [ "$attempt" -lt 3 ]; then
@@ -105,3 +109,20 @@ jobs:
         env:
           SITE_URL: ${{ needs.deploy.outputs.page_url }}
           EXPECTED_SOURCE_SHA: ${{ github.sha }}
+      - name: Preserve production acceptance diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+        with:
+          name: production-acceptance-${{ github.sha }}
+          path: production-acceptance.log
+          if-no-files-found: error
+          retention-days: 30
+      - name: Report production acceptance failure on checkpoint
+        if: ${{ failure() && steps.production_acceptance.conclusion == 'failure' && hashFiles('production-acceptance.log') != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          tail -c 6000 production-acceptance.log > production-acceptance-tail.log
+          body=$(printf 'Production acceptance failed on exact source `%s` in Pages run `%s` (job `%s`). Issue remains fail-closed.\n\n```text\n%s\n```' "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_JOB" "$(cat production-acceptance-tail.log)")
+          gh api "repos/$GITHUB_REPOSITORY/issues/35/comments" --raw-field body="$body"
