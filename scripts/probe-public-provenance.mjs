@@ -46,13 +46,14 @@ async function fetchManifest(url) {
     }
   });
   assert(response.status === 200, `PROVENANCE_CONTINUITY_HTTP_${response.status}`);
-  assert(response.url.startsWith(`${url.origin}${url.pathname}`), `PROVENANCE_CONTINUITY_REDIRECT:${response.url}`);
+  assert(response.url === url.href, `PROVENANCE_CONTINUITY_REDIRECT:${response.url}`);
   try { return JSON.parse(await response.text()); }
   catch { fail('PROVENANCE_CONTINUITY_JSON'); }
 }
 
 function validateManifest(manifest, expectedSourceSha) {
   assert(manifest && typeof manifest === 'object' && !Array.isArray(manifest), 'PROVENANCE_CONTINUITY_SHAPE');
+  assert(Object.keys(manifest).sort().join(',') === 'files,lockfileSha256,schemaVersion,sourceSha', 'PROVENANCE_CONTINUITY_KEYS');
   assert(manifest.schemaVersion === '1.0.0', 'PROVENANCE_CONTINUITY_SCHEMA');
   assert(manifest.sourceSha === expectedSourceSha, `PROVENANCE_CONTINUITY_SOURCE_SHA:${manifest.sourceSha}`);
   assert(typeof manifest.lockfileSha256 === 'string' && SHA256.test(manifest.lockfileSha256), 'PROVENANCE_CONTINUITY_LOCKFILE_SHA');

@@ -9,8 +9,8 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: public-provenance-continuity
-  cancel-in-progress: false
+  group: public-provenance-continuity-${{ github.event_name }}
+  cancel-in-progress: true
 
 jobs:
   verify:
