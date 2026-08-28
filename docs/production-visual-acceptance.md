@@ -45,9 +45,15 @@ The artifact archive text was not directly downloadable through the available pu
 
 - Open `P0 = 0`.
 - Open `P1 = 0`.
-- Open `P2 = 1`: deterministic font-evidence policy, owned by `@umutseve4`, tracked in [issue #36](https://github.com/umutseve4/cosmic-econometric-observatory/issues/36).
+- Open `P2 = 0`.
 - Open `P3 = 0`.
+- The former P2 deterministic font-evidence defect in [issue #36](https://github.com/umutseve4/cosmic-econometric-observatory/issues/36) was completed by [PR #45](https://github.com/umutseve4/cosmic-econometric-observatory/pull/45) at squash merge `a01ef2ef06fb820dc60c67a31beda1fb306a1bf0`.
+- Exact-merge CI run `33170910496`: `verify` job `98847562728` succeeded; policy-gated `publish-visual-evidence` job `98847830103` was skipped as designed.
+- Exact-merge Pages run `33170910481`: `build` job `98847562408`, `deploy` job `98847783737`, and `verify-production` job `98847836213` all succeeded.
+- Repository-wide enumeration after closure returned exactly `0` open issues.
+
+These counts describe the repository issue state at the recorded closure checkpoint; they are not a claim that the public provenance endpoint is continuously available after that point-in-time deployment verification.
 
 ## Scope boundary
 
-This checkpoint verifies the deployed Turkish product surface, exact-source artifact parity, default/fallback browser modes, responsive smoke, and the recorded visual rubric. Continuous rendering, camera and pointer interaction, broad cross-browser coverage, assistive-technology certification, production-scale performance, and disposal-throw resilience remain separate roadmap work.
+This checkpoint verifies the deployed Turkish product surface, exact-source artifact parity, default/fallback browser modes, responsive smoke, and the recorded visual rubric. Continuous rendering, camera and pointer interaction, broad cross-browser coverage, assistive-technology certification, production-scale performance, disposal-throw resilience, and continuous public-provenance monitoring remain separate roadmap work.
