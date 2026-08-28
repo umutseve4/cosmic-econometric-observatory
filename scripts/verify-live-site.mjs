@@ -158,7 +158,7 @@ async function stopChrome(chrome) {
 async function runBrowserCase(siteUrl, testCase, port) {
   const targetUrl = new URL(siteUrl);
   targetUrl.searchParams.set('__production_verify', randomUUID());
-  if (testCase.forceFallback) targetUrl.searchParams.set('forceFallback', '1');
+  if (testCase.forceFallback) targetUrl.searchParams.set('force-fallback', 'true');
   const chrome = spawn('google-chrome', [
     '--headless=new', '--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu-sandbox',
     '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader',
