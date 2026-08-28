@@ -1,0 +1,40 @@
+name: Apply fallback contract fix
+
+on:
+  push:
+    branches: [fix/production-fallback-query-contract]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor == 'umutseve4'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out patch branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: fix/production-fallback-query-contract
+      - name: Apply exact one-line contract fix and remove helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/verify-live-site.mjs')
+          old = "if (testCase.forceFallback) targetUrl.searchParams.set('forceFallback', '1');"
+          new = "if (testCase.forceFallback) targetUrl.searchParams.set('force-fallback', 'true');"
+          text = path.read_text()
+          if text.count(old) != 1:
+              raise SystemExit('expected exactly one legacy fallback query contract')
+          path.write_text(text.replace(old, new))
+          PY
+          rm .github/workflows/apply-fallback-contract-fix.yml
+          git diff --check
+          test "$(git diff -- scripts/verify-live-site.mjs | grep -c '^[+-].*searchParams.set')" -eq 2
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add scripts/verify-live-site.mjs .github/workflows/apply-fallback-contract-fix.yml
+          git commit -m "fix: align production fallback query contract"
+          git push
