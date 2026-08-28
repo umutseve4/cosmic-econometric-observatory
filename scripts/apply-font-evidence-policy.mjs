@@ -7,7 +7,7 @@ import {
   FONT_POLICY,
 } from './font-evidence-policy.mjs';
 
-const outputDir = path.resolve(process.env.VISUAL_OUTPUT_DIR ?? 'visual-acceptance-evidence');
+const outputDir = path.resolve(process.env.VISUAL_EVIDENCE_DIR ?? 'visual-acceptance-evidence');
 const metadataPath = path.join(outputDir, 'metadata.json');
 const readmePath = path.join(outputDir, 'README.md');
 const metadata = JSON.parse(await fs.readFile(metadataPath, 'utf8'));
