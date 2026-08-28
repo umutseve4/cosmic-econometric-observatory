@@ -1,96 +1,167 @@
 # Cosmic Econometric Observatory
 
-A deterministic, provenance-first world engine that compiles versioned academic catalogs into a knowledge graph, renderer-neutral Scene IR, and accessible projections.
+The Cosmic Econometric Observatory is an evidence-first econometrics graph platform. It models curriculum skills, methods, diagnostics, and evidence as explicit graph contracts so that later visual and analytical layers can be built on stable, testable foundations.
 
-This is a clean successor project. [`umutseve4/eko-rasathane`](https://github.com/umutseve4/eko-rasathane) remains an immutable legacy/reference repository; its application code and history are never imported or executed here.
+## Current Status
 
-## Architecture
+This repository is intentionally under active construction. The deterministic graph core, evidence lineage, structural validation, bounded layout projection, runtime-independent renderer plan, concrete Three.js adapter, injected fallback behavior, browser smoke paths, responsive application shell, and bounded GitHub Pages production verification are implemented and tested. The full production renderer remains deferred.
 
-`source snapshot → explicit assertions/anomalies → curriculum compiler → stable anchors/routes → domain graph → Scene IR → projections`
+### Implemented and verified
 
-| Entity | Meaning | Must not contain |
-|---|---|---|
-| `Course` | Persistent canonical academic entity | semester, instructor, room |
-| `CurriculumRelation` | A course's placement/status/credits in one curriculum version | section, instructor, schedule |
-| `Offering` | A time-bound delivery of a course | copied canonical title/credits |
+- Explicit node roles:
+  - `skill`
+  - `method`
+  - `diagnostic`
+  - `evidence`
+- Explicit edge relation kinds:
+  - `prerequisite`
+  - `applied_in`
+  - `validated_by`
+  - `supported_by`
+- Deterministic graph validation and canonicalization.
+- Deterministic topological ordering and stable graph hashing.
+- Evidence lineage checks, including orphan evidence detection.
+- Bounded overview and neighborhood projection contracts.
+- Deterministic path computation and accessible report generation.
+- Renderer plan generation with semantic labels, roles, and stable ordering.
+- Runtime-independent WebGL adapter contract for scenes, nodes, edges, picking, lifecycle, and typed initialization failure.
+- Concrete Three.js adapter contract implementation with injected runtime/document dependencies and deterministic lifecycle behavior.
+- Production browser bridge from DOM surfaces to the concrete Three.js adapter, including stable draw-order object mapping, fail-closed overlay picking, resize, context loss/restore, and disposal.
+- Deterministic fallback orchestration for initialization failure, `webglcontextlost`, restoration failure, and disposal-safe late-event suppression.
+- Real browser smoke coverage for the WebGL success path and deterministic fallback path.
+- Bounded keyboard interaction over ordered canvas nodes, with focus transfer to the deterministic DOM list.
+- Responsive application shell, production artifact parity, and four canonical viewport/fallback cases verified through GitHub Actions at the exact deployed source SHA.
+- Canonical visual acceptance: `4/4` states, responsive acceptance: `10/10`, rubric: `40/40`.
+- Deterministic visual-CI font evidence under the intentional `system-fallback` policy; issue `#36` closed by PR `#45`.
+- Repository issue backlog reconciled to exactly `0` open issues after PR `#45`.
+- Verified built-in reference graph:
+  - 5 nodes.
+  - 4 relations.
+  - 3 skill layers.
+  - 2 evidence nodes with 2 distinct artifact links.
+- Multi-layer automated verification covering valid graphs, invalid references, duplicates, self-loops, cycles, artifact validity, stable serialization, deterministic hashes, projection semantics, adapter planning, concrete adapter lifecycle behavior, browser smoke, site verification, and production verification.
 
-Human-facing course codes are assignments, never identity. Raw source values are never silently corrected. Every accepted or rejected assertion remains traceable to a content-addressed snapshot.
+## Quick Start
 
-## M1 — Source-backed BUÜ snapshot
+### Requirements
 
-M1 pins the 2025–2026 BUÜ Economics curriculum and timetable at legacy commit `db8d52f0b29d712c34e8b7487e2299ce9f75c266`.
+- Node.js `>=22`
 
-- `144` curriculum relations: `41` required and `103` elective.
-- `164` source offerings: `83` spring, `81` fall, `108` first education, `56` second education.
-- Reconciliation: `129` mapped, `15` mapped-with-anomaly, `0` ambiguous, `20` unmatched.
-- Unmatched offerings receive timetable-derived `Course` identities; no fake curriculum relation is invented.
-- Duplicate codes, suspicious spellings, the `241` versus `240` ECTS conflict, and printed-code mismatches remain explicit anomalies.
-- Fixture lengths and SHA-256 values are checked against the committed manifest.
+### Install
 
-## M2a — Deterministic curriculum graph core
+```bash
+npm ci
+```
 
-M2a compiles the source-backed institution, Econometrics program, 2025–2026 curriculum, and its curriculum courses into versioned artifacts.
+### Run the default verification suite
 
-- Every `144` `CurriculumRelation` record is projected exactly once with semester, status, ECTS, optional pool, and provenance.
-- Insertion-only evolution accepts a complete previous `CurriculumCompilation`; the previous graph, `AnchorManifestV1`, and `RouteManifestV1` are hash-bound and must have exact node-set parity.
-- Retained anchors, slots, coordinates, and canonical `/v1/nodes/{persistent-id}` URLs remain stable. Prior course-assignment records are immutable and cumulative; aliases are derived exactly and deterministically from that cumulative assignment history.
-- `RouteManifestV1` derives canonical `/v1/nodes/{persistent-id}` URLs from stable identity; course codes are aliases only.
-- Input ordering and locale cannot alter canonical output.
-- Duplicate/dangling identities, malformed or mixed provenance, unknown anomaly references, silent relation drift, prior-node removal, internally inconsistent predecessor state, and enforceable continuity violations are fatal. The compiler validates continuity relative to the supplied predecessor; without an external trust anchor it does not authenticate that predecessor or detect a coordinated full-bundle rewrite.
-- Known offering-only anomalies remain valid snapshot evidence but are excluded from the M2a curriculum graph.
-- Topics and laboratories are intentionally deferred until pinned evidence exists; renderer and deployment remain outside M2a.
+```bash
+npm test
+```
 
-See [`docs/adr/0002-m2a-curriculum-graph-core.md`](docs/adr/0002-m2a-curriculum-graph-core.md) for the exact boundary.
+The default suite remains deterministic and does not require a browser, display server, GPU, or real WebGL context.
 
-## M3a — Semantic projection contract
+### Run browser smoke verification
 
-M3a establishes a renderer-neutral parity gate before browser rendering begins.
+Install Google Chrome, Chrome Stable, Chromium, or Chromium Browser, then run:
 
-- `project()` returns the versioned `ProjectionManifestV2`; the legacy `ProjectionManifest` construction shape remains source-compatible.
-- Three.js payload, SVG projection and HTML fallback expose identical sorted semantic node/edge identifiers.
-- A separate `focusOrderNodeIds` contract makes keyboard and screen-reader traversal deterministic even if Scene IR arrays arrive in a different order.
-- HTML navigation links resolve to balanced node detail targets and relation endpoints remain traversable.
-- SVG nodes expose ordered list semantics, position-aware accessible labels and keyboard focus without an ancestor `img` role hiding descendants from the accessibility tree.
-- Duplicate node identifiers and invalid or duplicate focus orders fail closed before any projection is emitted.
-
-## M3b — Injected browser preparation/mount boundary
-
-M3b adds a dependency-free boundary between projection manifests and an injected browser host.
-
-- HTML/SVG content is prepared off-target through an injected DOM port; Three JSON is parsed and validated before an injected Three preparation port is called.
-- Schema, sorted/unique semantic membership, focus-order parity and prepared metadata are validated before target mutation.
-- Pre-commit failures do not invoke the target. After all checks pass, the adapter makes exactly one `replaceChildren()` commit attempt.
-- If the injected target mutates and then throws, rollback is outside the adapter contract.
-- Port-produced root nodes remain a trusted-port boundary; their semantic metadata is runtime-validated.
-
-## M3c–M3e — Concrete parsing and trusted semantic parity
-
-- An allow-listed DOM adapter parses generated HTML/SVG into detached content and rejects active or unexpected structure before mount.
-- A real headless Chromium smoke covers parser behavior, hostile-label escaping, namespace correctness, semantic parity and exact mutation counts.
-- Manifest and prepared node/edge descriptors are independently reconstructed and compared before target mutation.
-
-## M3f — Bounded Three.js/WebGL vertical slice
-
-M3f adds an exact-pinned `three@0.185.1` adapter without claiming a production renderer.
-
-- Canonical Three DTOs are validated and prepared off-target into a detached scene.
-- A deterministic `320×240`, one-frame WebGL render preserves semantic node/edge descriptors and focus order.
-- GPU geometries, materials and renderer resources are disposed on covered success and preparation-failure paths; disposal-throw resilience is not yet claimed.
-- The canvas is `aria-hidden="true"`; accessible semantics remain the responsibility of the equivalent HTML/SVG surfaces.
-- A real Chromium/SwiftShader smoke verifies `2` nodes, `1` edge, WebGL context health, `NO_ERROR`, forced-renderer rejection and `0` target mounts on preparation failure.
-
-This is intentionally not a continuous render loop, camera controls, picking, responsive application shell, cross-browser/assistive-technology conformance, or deployment.
-
-## Verify
-
-Requires Node.js 22 or newer. The dependency graph is locked.
-
-```sh
-npm ci --ignore-scripts
-npm run verify
+```bash
 npm run test:browser-smoke
 ```
 
-The standard verification gate includes type checking, build, M0/M1/M2 domain tests, materializer safety tests, fixture integrity, environment determinism, legacy isolation, renderer regressions, and real-Chromium DOM/WebGL smoke tests.
+### Run the complete verification suite
 
-A production interactive WebGL renderer, scraping, databases, user accounts, and LLM/RAG integration are not yet implemented.
+```bash
+npm run verify
+```
+
+This command runs deterministic source checks and, when a supported browser binary is available, the browser smoke suite.
+
+## Project Structure
+
+```text
+.
+├── .github/
+│   └── workflows/
+│       └── ci.yml
+├── docs/
+│   ├── adr/
+│   │   └── 0002-m2a-curriculum-graph-core.md
+│   ├── architecture.md
+│   └── invariants.md
+├── modules/
+│   ├── browser-dom-adapter.js
+│   ├── browser-fallback-orchestrator.js
+│   ├── browser-node-selection.js
+│   ├── browser-renderer.js
+│   ├── browser-three-adapter.js
+│   ├── canonical.js
+│   └── projections.js
+├── scripts/
+│   ├── run-browser-smoke.mjs
+│   └── verify-static.mjs
+├── tests/
+│   ├── browser-node-selection.test.mjs
+│   ├── browser-renderer.test.mjs
+│   ├── browser-three-adapter.test.mjs
+│   ├── canonical.test.mjs
+│   ├── projections.test.mjs
+│   └── reference-graph.test.mjs
+├── .nvmrc
+├── README.md
+├── ROADMAP.md
+├── app.js
+├── index.html
+├── package-lock.json
+├── package.json
+└── styles.css
+```
+
+## Evidence-First Scope
+
+The project favors small, contract-driven increments:
+
+1. Define semantic graph contracts.
+2. Prove deterministic structural behavior.
+3. Add bounded projections and accessible output.
+4. Define runtime-independent renderer plans.
+5. Add runtime adapters without breaking deterministic testability.
+6. Integrate the real browser and WebGL path.
+7. Verify bounded production artifacts and canonical live-browser cases.
+
+This sequencing avoids hiding domain ambiguity behind visual polish or making renderer correctness depend on an unavailable local GPU stack.
+
+## Verification Contract
+
+The repository currently enforces:
+
+- Node.js floor `>=22`.
+- Deterministic static verification.
+- Lockfile reproducibility.
+- Pinned runtime dependencies.
+- Offline-compatible smoke and unit tests.
+- Strict graph invariants.
+- Stable serialization and hash expectations.
+- Explicit renderer adapter and lifecycle contracts.
+- Optional real-browser success and fallback smoke verification.
+- Exact-source production artifact, digest, provenance, and canonical-browser verification in the Pages workflow.
+
+## Maturity Limits
+
+The repository is not yet a full econometric computation engine or universally certified production renderer. It does not yet claim:
+
+- Continuous rendering or animation.
+- Camera or pointer interaction.
+- Broad cross-browser or assistive-technology certification.
+- Production-scale graph performance.
+- Real-device WebGL validation beyond the bounded browser smoke and canonical production cases.
+- Disposal paths that throw and still guarantee complete teardown.
+- Continuously current public provenance availability outside the point-in-time deployment verification recorded by GitHub Actions.
+
+The exact-merge Pages workflow for `a01ef2ef06fb820dc60c67a31beda1fb306a1bf0` passed build, deploy, and production verification, but that is point-in-time evidence rather than a claim that every later direct public provenance request must succeed.
+
+See [`ROADMAP.md`](ROADMAP.md) for milestone history, bounded closure evidence, and deferred work.
+
+## License
+
+No license has been declared yet.
