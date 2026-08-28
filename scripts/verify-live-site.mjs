@@ -90,7 +90,7 @@ function parseManifest(bytes, expectedSourceSha) {
 
 async function verifyArtifact(siteUrl, expectedSourceSha) {
   const manifest = await retry('manifest', 12, 10_000, async () => {
-    const { bytes } = await fetchBytes(childUrl(siteUrl, 'artifact-manifest.json'));
+    const { bytes } = await fetchBytes(childUrl(siteUrl, 'deployment-provenance.json'));
     return parseManifest(bytes, expectedSourceSha);
   });
   for (const entry of manifest.files) {

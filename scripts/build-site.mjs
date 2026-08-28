@@ -60,8 +60,8 @@ const manifest = {
   lockfileSha256,
   files
 };
-writeFileSync(resolve(output, 'artifact-manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' });
-console.log(JSON.stringify({ output: relative(root, output), sourceSha: head, manifestSha256: sha256(readFileSync(resolve(output, 'artifact-manifest.json'))), files: files.length }));
+writeFileSync(resolve(output, 'deployment-provenance.json'), `${JSON.stringify(manifest, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' });
+console.log(JSON.stringify({ output: relative(root, output), sourceSha: head, manifestSha256: sha256(readFileSync(resolve(output, 'deployment-provenance.json'))), files: files.length }));
 
 function composeSafeDomAdapter() {
   const destination = resolve(output, 'modules/browser-dom-adapter.js');

@@ -17,7 +17,7 @@ try {
   if (JSON.stringify(first) !== JSON.stringify(second)) throw new Error('SITE_VERIFY_NON_DETERMINISTIC');
   const canonical = snapshot(canonicalOutput);
   if (JSON.stringify(canonical) !== JSON.stringify(first)) throw new Error('SITE_VERIFY_CANONICAL_DRIFT');
-  console.log(`M3G_SITE_ARTIFACT_VERIFIED:${sha256(readFileSync(resolve(canonicalOutput, 'artifact-manifest.json')))}`);
+  console.log(`M3G_SITE_ARTIFACT_VERIFIED:${sha256(readFileSync(resolve(canonicalOutput, 'deployment-provenance.json')))}`);
 } finally {
   rmSync(firstOutput, { recursive: true, force: true });
   rmSync(secondOutput, { recursive: true, force: true });
@@ -31,7 +31,7 @@ function build(output) {
   });
 }
 function verifyManifest(output) {
-  const manifestPath = resolve(output, 'artifact-manifest.json');
+  const manifestPath = resolve(output, 'deployment-provenance.json');
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
   const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
   if (manifest.schemaVersion !== '1.0.0' || manifest.sourceSha !== head || !/^[0-9a-f]{64}$/u.test(manifest.lockfileSha256) || !Array.isArray(manifest.files)) throw new Error('SITE_VERIFY_INVALID_MANIFEST');
@@ -50,7 +50,7 @@ function verifyManifest(output) {
     const bytes = readFileSync(file);
     if (bytes.byteLength !== entry.bytes || sha256(bytes) !== entry.sha256) throw new Error(`SITE_VERIFY_DIGEST_MISMATCH:${entry.path}`);
   }
-  const actual = listFiles(output).filter((path) => path !== 'artifact-manifest.json');
+  const actual = listFiles(output).filter((path) => path !== 'deployment-provenance.json');
   if (JSON.stringify(actual) !== JSON.stringify(paths)) throw new Error('SITE_VERIFY_FILE_SET_DRIFT');
 }
 function snapshot(output) {

@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 
 const root = resolve(process.cwd());
 const artifact = resolve(root, 'dist-site');
-const manifestPath = resolve(artifact, 'artifact-manifest.json');
+const manifestPath = resolve(artifact, 'deployment-provenance.json');
 const stylePath = resolve(root, 'site/styles.css');
 const originalStyle = readFileSync(stylePath);
 let passed = 0;

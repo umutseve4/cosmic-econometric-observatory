@@ -76,7 +76,7 @@ jobs:
       - name: Capture artifact digest
         id: artifact
         shell: bash
-        run: echo "digest=$(sha256sum dist-site/artifact-manifest.json | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+        run: echo "digest=$(sha256sum dist-site/deployment-provenance.json | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
       - name: Upload immutable static artifact
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
