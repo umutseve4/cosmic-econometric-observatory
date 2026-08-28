@@ -1,33 +1,22 @@
 {
-  "name": "cosmic-econometric-observatory",
-  "version": "0.1.0",
+  "name": "@ceo/world-engine",
+  "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Deterministic evidence pipeline for the Cosmic Econometric Observatory data product.",
-  "engines": {
-    "node": ">=22"
-  },
+  "engines": { "node": ">=22" },
   "scripts": {
-    "test": "node --test",
-    "typecheck": "tsc --noEmit --allowJs --checkJs --target ES2022 --module NodeNext --moduleResolution NodeNext --types node scripts/build-data-product.mjs scripts/verify-live-site.mjs",
-    "lint": "eslint . --max-warnings=0",
-    "format:check": "prettier --check .",
-    "build": "node scripts/build-data-product.mjs",
-    "verify:data": "node scripts/verify-data-product.mjs",
-    "verify:runtime": "node scripts/verify-runtime-contract.mjs",
-    "verify:site": "node scripts/verify-site-config.mjs",
-    "smoke:browser": "node scripts/browser-smoke.mjs",
-    "capture:visual-acceptance": "node --import ./scripts/font-policy-preload.mjs scripts/capture-visual-acceptance.mjs && node scripts/apply-font-evidence-policy.mjs",
-    "verify": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run build && npm run verify:data && npm run verify:runtime && npm run verify:site"
+    "clean": "node -e \"import('node:fs').then(fs=>fs.rmSync('dist',{recursive:true,force:true}))\"",
+    "build": "npm run clean && tsc -p tsconfig.json",
+    "build:site": "npm run build && node scripts/build-site.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit && node --check scripts/verify-live-site.mjs",
+    "test": "npm run build && node --test dist/tests/*.test.js tests/*.test.mjs",
+    "test:browser-smoke": "node scripts/run-real-browser-smoke.mjs && node scripts/run-responsive-browser-smoke.mjs",
+    "test:site-negative": "node scripts/test-site-negative.mjs",
+    "verify:site": "npm run build:site && npm run test:site-negative && node scripts/verify-site.mjs",
+    "verify:production": "node scripts/verify-live-site.mjs",
+    "verify": "npm run typecheck && npm test && npm run verify:site",
+    "capture:visual-acceptance": "node --import ./scripts/font-policy-preload.mjs scripts/capture-visual-acceptance.mjs && node scripts/apply-font-evidence-policy.mjs"
   },
-  "dependencies": {
-    "three": "0.185.1"
-  },
-  "devDependencies": {
-    "@eslint/js": "9.35.0",
-    "@types/node": "22.17.2",
-    "eslint": "9.35.0",
-    "prettier": "3.6.2",
-    "typescript": "5.9.2"
-  }
+  "dependencies": { "three": "0.185.1" },
+  "devDependencies": { "typescript": "5.9.2", "@types/node": "22.17.2" }
 }
