@@ -8,19 +8,27 @@ on:
       - .github/workflows/materialize-m1.yml
   workflow_dispatch:
 
+concurrency:
+  group: materialize-m1-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
 jobs:
   build:
+    if: github.ref == 'refs/heads/feat/m1-source-backed-buu-snapshot'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
     steps:
       - name: Check out successor
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           path: successor
       - name: Check out pinned legacy evidence
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: umutseve4/eko-rasathane
           ref: db8d52f0b29d712c34e8b7487e2299ce9f75c266
@@ -34,7 +42,7 @@ jobs:
       - name: Stage deterministic artifacts
         run: cp -R "$RUNNER_TEMP/first/vendor" successor/vendor
       - name: Upload evidence artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
         with:
           name: m1-evidence
           path: successor/vendor
@@ -50,5 +58,3 @@ jobs:
           git commit -m "data: vendor pinned M1 BUÜ evidence"
           git push
         shell: bash
-    permissions:
-      contents: write
