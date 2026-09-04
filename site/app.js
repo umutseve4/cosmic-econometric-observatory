@@ -85,6 +85,7 @@ function configureExplorer(artifact, controller, snapshotId) {
   const inspector = required('#course-inspector');
   const courseById = new Map(artifact.courses.map((course) => [course.id, course]));
   const nodeById = new Map(artifact.scene.nodes.map((node) => [node.id, node]));
+  const resultButtons = () => [...list.querySelectorAll('button[data-node-id]')];
   const renderResults = () => {
     const needle = normalizeSearch(input.value);
     const semesterValue = semester.value;
@@ -103,13 +104,36 @@ function configureExplorer(artifact, controller, snapshotId) {
       item.append(button); return item;
     }));
     summary.textContent = `${matches.length} ders gösteriliyor`;
+    const selectedId = controller.getState().selectedNodeId;
+    if (selectedId !== null && !matches.some(({ id }) => id === selectedId)) controller.dispatch({ type: 'clear', expectedSnapshotId: snapshotId });
   };
   input.addEventListener('input', renderResults);
   semester.addEventListener('change', renderResults);
   status.addEventListener('change', renderResults);
+  input.addEventListener('keydown', (event) => {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+    const buttons = resultButtons();
+    if (buttons.length === 0) return;
+    event.preventDefault();
+    buttons[event.key === 'ArrowDown' ? 0 : buttons.length - 1].focus();
+  });
+  list.addEventListener('keydown', (event) => {
+    const buttons = resultButtons();
+    const index = buttons.indexOf(document.activeElement);
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      controller.dispatch({ type: 'clear', expectedSnapshotId: snapshotId });
+      input.focus();
+      return;
+    }
+    if (index < 0 || (event.key !== 'ArrowDown' && event.key !== 'ArrowUp' && event.key !== 'Home' && event.key !== 'End')) return;
+    event.preventDefault();
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : Math.max(0, Math.min(buttons.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)));
+    buttons[next].focus();
+  });
   renderResults();
   return (selectedId) => {
-    for (const button of list.querySelectorAll('button[data-node-id]')) {
+    for (const button of resultButtons()) {
       if (button.dataset.nodeId === selectedId) button.setAttribute('aria-current', 'true');
       else button.removeAttribute('aria-current');
     }
