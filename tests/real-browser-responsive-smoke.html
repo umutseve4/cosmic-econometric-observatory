@@ -34,8 +34,21 @@ function inspect(){
   const paths=[...svg.querySelectorAll('path[data-edge-id]')];if(paths.length!==146||paths.some((path)=>!finitePath(path.getAttribute('d')||'')))throw new Error(`svg edge geometry:${paths.length}`);
   if(svg.querySelectorAll('g[data-node-id]').length!==147)throw new Error('svg node count');
  }
- const first=doc.querySelector('#search-results button[data-node-id]');first?.click();
+ const search=doc.querySelector('#course-search'),buttons=[...doc.querySelectorAll('#search-results button[data-node-id]')],first=buttons[0],second=buttons[1],last=buttons.at(-1);
+ search.focus();search.dispatchEvent(new win.KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true}));
+ if(doc.activeElement!==first)throw new Error('search ArrowDown entry');
+ first.dispatchEvent(new win.KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true}));
+ if(doc.activeElement!==second)throw new Error('result ArrowDown navigation');
+ first.focus();first.dispatchEvent(new win.KeyboardEvent('keydown',{key:'ArrowUp',bubbles:true,cancelable:true}));
+ if(doc.activeElement!==first)throw new Error('result ArrowUp clamp');
+ last.focus();last.dispatchEvent(new win.KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true}));
+ if(doc.activeElement!==last)throw new Error('result ArrowDown clamp');
+ first?.click();
  if(!first||first.getAttribute('aria-current')!=='true'||!doc.querySelector('#course-inspector code'))throw new Error('search selection inspector');
+ const semester=doc.querySelector('#semester-filter');semester.value='8';semester.dispatchEvent(new win.Event('change',{bubbles:true}));
+ if(first.getAttribute('aria-current')==='true'||!doc.querySelector('#course-inspector .empty-inspector'))throw new Error('filtered selection clear');
+ semester.value='';semester.dispatchEvent(new win.Event('change',{bubbles:true}));
+ if(doc.querySelectorAll('#search-results button[data-node-id]').length!==144)throw new Error('filter reset');
  if(doc.querySelector('#result')?.textContent?.trim()!=='M3G_SITE_SMOKE_PASS')throw new Error('runtime marker');
  result.textContent=PASS;
 }
