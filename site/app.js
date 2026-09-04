@@ -4,6 +4,7 @@ import { renderProjection } from './modules/browser-renderer.js';
 import { renderThreeWithFallback } from './modules/browser-fallback-orchestrator.js';
 import { createBrowserThreePort } from './modules/browser-three-adapter.js';
 import { applyNodeSelectionTransition, bindNodeSelectionSurface, createNodeSelectionController } from './modules/browser-node-selection.js';
+import { deriveDirectRelations } from './modules/direct-relations.js';
 import { project } from './modules/projections.js';
 
 const result = document.querySelector('#result');
@@ -46,7 +47,7 @@ try {
   if (visualReceipt.outcome === 'fallback') bindings.push(bindNodeSelectionSurface({ root: visualTarget, projection: 'svg', snapshotId: scene.inputHash, focusOrderNodeIds: visualReceipt.render.focusOrderNodeIds, dispatch: (command) => controller.dispatch(command), initialState: controller.getState() }));
   else if (visualTarget.querySelector('canvas')?.getAttribute('aria-hidden') !== 'true') throw new Error('three canvas accessibility boundary');
 
-  updateInspector = configureExplorer(artifact, controller, scene.inputHash);
+  updateInspector = configureExplorer(artifact, controller, scene.inputHash, htmlTarget, visualTarget, visualReceipt.outcome);
   updateInspector(null);
   if (selectionSmoke) {
     runSelectionSmoke(htmlTarget, visualTarget, visualReceipt, controller, scene.inputHash, () => logicalCommits);
@@ -76,7 +77,7 @@ async function loadArtifact() {
   return value;
 }
 
-function configureExplorer(artifact, controller, snapshotId) {
+function configureExplorer(artifact, controller, snapshotId, htmlTarget, visualTarget, visualOutcome) {
   const input = required('#course-search');
   const semester = required('#semester-filter');
   const status = required('#status-filter');
@@ -137,12 +138,52 @@ function configureExplorer(artifact, controller, snapshotId) {
       if (button.dataset.nodeId === selectedId) button.setAttribute('aria-current', 'true');
       else button.removeAttribute('aria-current');
     }
-    if (selectedId === null) { inspector.innerHTML = '<p class="empty-inspector">Bir ders seçtiğinde dönem, tür, AKTS ve kaynak izi burada görünür.</p>'; return; }
+    const relations = deriveDirectRelations(artifact.scene, selectedId);
+    paintRelationState(htmlTarget, selectedId, relations);
+    if (visualOutcome === 'fallback') paintRelationState(visualTarget, selectedId, relations);
+    if (selectedId === null) { inspector.innerHTML = '<p class="empty-inspector">Bir ders seçtiğinde dönem, tür, AKTS, kaynak izi ve doğrudan ilişkiler burada görünür.</p>'; return; }
     const course = courseById.get(selectedId);
     const node = nodeById.get(selectedId);
-    if (!course) { inspector.innerHTML = `<h3>${escapeHtml(node?.label || selectedId)}</h3><p>Bu düğüm müfredat hiyerarşisinin parçasıdır. Ders ayrıntısı mevcut değildir.</p>`; return; }
-    inspector.innerHTML = `<p class="inspector-kicker">Seçili ders</p><h3>${escapeHtml(course.code)} · ${escapeHtml(course.title)}</h3><dl><div><dt>Yarıyıl</dt><dd>${course.semester}</dd></div><div><dt>Tür</dt><dd>${course.status === 'required' ? 'Zorunlu' : 'Seçmeli'}</dd></div><div><dt>AKTS</dt><dd>${course.ects}</dd></div><div><dt>Seçmeli havuzu</dt><dd>${course.poolId ? escapeHtml(course.poolId) : 'Uygulanamaz'}</dd></div></dl><details><summary>Kaynak ve dönüşüm izi</summary><code>${escapeHtml(course.provenance.sourceId)}</code><code>${escapeHtml(course.provenance.snapshotId)}</code><code>${escapeHtml(course.provenance.locator)}</code><code>${escapeHtml(course.provenance.contentHash)}</code><code>${escapeHtml(course.provenance.transformationVersion || 'Mevcut değil')}</code></details><p class="containment-note">Bu ders, 2025–2026 Ekonometri Müfredatı tarafından içerilir. Önkoşul veya eşkoşul ilişkisi iddia edilmez.</p>`;
+    const relationMarkup = renderRelationInspector(relations, nodeById);
+    if (!course) { inspector.innerHTML = `<h3>${escapeHtml(node?.label || selectedId)}</h3><p>Bu düğüm müfredat hiyerarşisinin parçasıdır. Ders ayrıntısı mevcut değildir.</p>${relationMarkup}`; return; }
+    inspector.innerHTML = `<p class="inspector-kicker">Seçili ders</p><h3>${escapeHtml(course.code)} · ${escapeHtml(course.title)}</h3><dl><div><dt>Yarıyıl</dt><dd>${course.semester}</dd></div><div><dt>Tür</dt><dd>${course.status === 'required' ? 'Zorunlu' : 'Seçmeli'}</dd></div><div><dt>AKTS</dt><dd>${course.ects}</dd></div><div><dt>Seçmeli havuzu</dt><dd>${course.poolId ? escapeHtml(course.poolId) : 'Uygulanamaz'}</dd></div></dl><details><summary>Kaynak ve dönüşüm izi</summary><code>${escapeHtml(course.provenance.sourceId)}</code><code>${escapeHtml(course.provenance.snapshotId)}</code><code>${escapeHtml(course.provenance.locator)}</code><code>${escapeHtml(course.provenance.contentHash)}</code><code>${escapeHtml(course.provenance.transformationVersion || 'Mevcut değil')}</code></details><p class="containment-note">Bu ders, 2025–2026 Ekonometri Müfredatı tarafından içerilir. Önkoşul veya eşkoşul ilişkisi iddia edilmez.</p>${relationMarkup}`;
   };
+}
+
+function paintRelationState(root, selectedId, relations) {
+  const incomingNodes = new Set(relations.incoming.map(({ relatedNodeId }) => relatedNodeId));
+  const outgoingNodes = new Set(relations.outgoing.map(({ relatedNodeId }) => relatedNodeId));
+  const incomingEdges = new Set(relations.incoming.map(({ edgeId }) => edgeId));
+  const outgoingEdges = new Set(relations.outgoing.map(({ edgeId }) => edgeId));
+  for (const element of root.querySelectorAll('[data-node-id]')) {
+    if (selectedId === null) { delete element.dataset.relationState; continue; }
+    const id = element.dataset.nodeId;
+    element.dataset.relationState = id === selectedId ? 'selected' : directionalState(incomingNodes.has(id), outgoingNodes.has(id));
+  }
+  for (const element of root.querySelectorAll('[data-edge-id]')) {
+    if (selectedId === null) { delete element.dataset.relationState; continue; }
+    const id = element.dataset.edgeId;
+    element.dataset.relationState = directionalState(incomingEdges.has(id), outgoingEdges.has(id));
+  }
+}
+
+function directionalState(incoming, outgoing) {
+  if (incoming && outgoing) return 'incoming-outgoing';
+  if (incoming) return 'incoming';
+  if (outgoing) return 'outgoing';
+  return 'unrelated';
+}
+
+function renderRelationInspector(relations, nodeById) {
+  return `<div class="relation-inspector" aria-label="Doğrudan müfredat ilişkileri"><section aria-labelledby="incoming-relations-title"><h4 id="incoming-relations-title">Gelen ilişkiler</h4>${renderRelationList(relations.incoming, nodeById, 'Gelen ilişki yok.')}</section><section aria-labelledby="outgoing-relations-title"><h4 id="outgoing-relations-title">Giden ilişkiler</h4>${renderRelationList(relations.outgoing, nodeById, 'Giden ilişki yok.')}</section></div>`;
+}
+
+function renderRelationList(relations, nodeById, emptyText) {
+  if (relations.length === 0) return `<p class="empty-relations">${emptyText}</p>`;
+  return `<ul>${relations.map((relation) => {
+    const counterpart = nodeById.get(relation.relatedNodeId);
+    return `<li data-edge-id="${escapeHtml(relation.edgeId)}" data-direction="${relation.direction}"><strong>${escapeHtml(relation.semanticKind)}</strong><span>${escapeHtml(counterpart?.label || relation.relatedNodeId)}</span><code>${escapeHtml(relation.edgeId)}</code></li>`;
+  }).join('')}</ul>`;
 }
 
 function runSelectionSmoke(htmlRoot, visualRoot, visualReceipt, controller, snapshotId, commitCount) {
