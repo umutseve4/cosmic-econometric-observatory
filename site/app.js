@@ -331,8 +331,10 @@ function createThreeFocusController(sceneIr, visualTarget, readRuntime, armPixel
 function createPixelEvidenceRecorder(visualTarget, enabled, readRuntime) {
   const SAMPLE_EDGE = 256;
   const CAPTURE_TIMEOUT_MS = 4000;
+  const MAX_REARMS = 5;
   let renderer = null;
   let pending = null;
+  let rearms = 0;
 
   const publish = (report) => { visualTarget.dataset.pixelEvidence = JSON.stringify(report); };
 
@@ -354,6 +356,18 @@ function createPixelEvidenceRecorder(visualTarget, enabled, readRuntime) {
     if (pending === null || renderer === null) return;
     const gl = renderer.getContext();
     const region = readCentredRegion(gl);
+    // A responsive resize between arming and rendering changes the drawing
+    // buffer, so the baselines and the frame would describe different
+    // geometries. Re-arm on the new geometry instead of comparing buffers that
+    // are not comparable; bounded so a permanently flapping layout still fails.
+    if (region.width !== pending.width || region.height !== pending.height) {
+      if (rearms < MAX_REARMS) {
+        rearms += 1;
+        arm(true);
+        window.setTimeout(() => { readRuntime()?.invalidate(); }, 0);
+        return;
+      }
+    }
     if (pending.frameOne === null) {
       pending.frameOne = region.buffer;
       // The second render is requested from a fresh task so the scheduler is
@@ -374,8 +388,9 @@ function createPixelEvidenceRecorder(visualTarget, enabled, readRuntime) {
     }));
   };
 
-  const arm = () => {
+  const arm = (isRearm) => {
     if (!enabled || renderer === null) return;
+    if (isRearm !== true) rearms = 0;
     try {
       if (pending !== null) window.clearTimeout(pending.timer);
       pending = null;
@@ -406,6 +421,8 @@ function createPixelEvidenceRecorder(visualTarget, enabled, readRuntime) {
         blank: blank.buffer,
         sentinel: sentinel.buffer,
         frameOne: null,
+        width: blank.width,
+        height: blank.height,
         timer: window.setTimeout(() => {
           pending = null;
           publish(evaluatePixelEvidence(
