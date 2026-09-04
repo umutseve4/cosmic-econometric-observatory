@@ -73,9 +73,27 @@
       const phrases = [['Academic knowledge universe','Akademik bilgi evreni'],['Knowledge node details','Bilgi düğümü ayrıntıları'],['Knowledge relations','Bilgi ilişkileri'],['Knowledge nodes','Bilgi düğümleri'],['Relations','İlişkiler'],['institution','kurum'],['curriculum','müfredat'],['course','ders'],['program','lisans programı'],['inspect','incele'],['navigate','gezin'],['CONTAINS','İÇERİR']];
       const attributes = ['aria-label','title','alt','placeholder','value','aria-description'];
       const translate = (value) => { let output = value; for (const [from,to] of phrases) output = output.split(from).join(to); return output.replace(/(\d+) of (\d+):/g,'$2 öğeden $1.:'); };
-      const localize = (root) => { const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT); let node; while ((node = walker.nextNode())) node.nodeValue = translate(node.nodeValue); for (const element of [root,...root.querySelectorAll('*')]) for (const attribute of attributes) { const value = element.getAttribute?.(attribute); if (value !== null && value !== undefined) element.setAttribute(attribute,translate(value)); } };
+      const localize = (root) => {
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        let node;
+        while ((node = walker.nextNode())) {
+          const translated = translate(node.nodeValue);
+          if (translated !== node.nodeValue) node.nodeValue = translated;
+        }
+        for (const element of [root, ...root.querySelectorAll('*')]) {
+          for (const attribute of attributes) {
+            const value = element.getAttribute?.(attribute);
+            if (value !== null && value !== undefined) {
+              const translated = translate(value);
+              if (translated !== value) element.setAttribute(attribute, translated);
+            }
+          }
+        }
+      };
       const roots = [document.querySelector('#html-universe'),document.querySelector('#webgl-universe')];
-      const refresh = () => roots.forEach(localize); roots.forEach((root) => new MutationObserver(refresh).observe(root,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:attributes})); refresh();
+      const refresh = () => roots.forEach(localize);
+      roots.forEach((root) => new MutationObserver(refresh).observe(root,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:attributes}));
+      refresh();
     })();
   </script>
   <script type="module" src="./app.js" onerror="window.__reportM3gModuleFailure('load-error')"></script>
