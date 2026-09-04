@@ -84,6 +84,7 @@ test('HTML fallback provides structurally nested node targets and linked relatio
   assert.match(html, /<a href="#node:a" data-node-id="node:a">A &lt;Program&gt;<\/a>/);
   assert.match(html, /<article id="node:a" tabindex="-1"/);
   assert.match(html, /data-edge-id="edge:b-a"/);
+  assert.match(html, /data-source="node:a" data-target="node:b"/);
   assert.match(html, /<a href="#node:a">node:a<\/a> → <a href="#node:b">node:b<\/a>/);
   assert.doesNotMatch(html, /A <Program>/);
   assertStructurallyNested(html);
@@ -140,7 +141,7 @@ for (const escapeCase of escapeCases) {
     const html = project(hostileScene, 'html').content;
     assert.ok(html.includes(`<a href="#${encodedNodeAId}" data-node-id="${encodedNodeAId}">${encodedNodeLabel}</a>`));
     assert.ok(html.includes(`<article id="${encodedNodeAId}" tabindex="-1" data-node-id="${encodedNodeAId}" data-semantic-kind="${encodedNodeKind}"><h2>${encodedNodeLabel}</h2><p>${encodedNodeKind}</p></article>`));
-    assert.ok(html.includes(`<li data-edge-id="${encodedEdgeId}" data-semantic-kind="${encodedEdgeKind}"><a href="#${encodedNodeAId}">${encodedNodeAId}</a> → <a href="#${encodedNodeBId}">${encodedNodeBId}</a></li>`));
+    assert.ok(html.includes(`<li data-edge-id="${encodedEdgeId}" data-semantic-kind="${encodedEdgeKind}" data-source="${encodedNodeAId}" data-target="${encodedNodeBId}"><a href="#${encodedNodeAId}">${encodedNodeAId}</a> → <a href="#${encodedNodeBId}">${encodedNodeBId}</a></li>`));
     assertStructurallyNested(html);
     const svg = project(hostileScene, 'svg').content;
     assert.ok(svg.includes(`<g id="${encodedNodeAId}" role="listitem" tabindex="0" data-node-id="${encodedNodeAId}" data-semantic-kind="${encodedNodeKind}" aria-label="1 of 2: ${encodedNodeLabel} (${encodedNodeKind})"><circle`));
