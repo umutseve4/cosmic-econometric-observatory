@@ -35,7 +35,7 @@ const timeoutMs = 60_000; const shutdownGraceMs = 2_000;
 
 async function runCase(width, mode, port) {
   const url = `http://127.0.0.1:${port}/tests/real-browser-responsive-smoke.html?width=${width}&mode=${mode}`;
-  const browser = spawn(chrome, ['--headless=new', '--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', `--window-size=${Math.max(width, 500)},1000`, '--dump-dom', url], {
+  const browser = spawn(chrome, ['--headless=new', '--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--virtual-time-budget=10000', `--window-size=${Math.max(width, 500)},1000`, '--dump-dom', url], {
     stdio: ['ignore', 'pipe', 'pipe'], detached: usesDetachedProcessGroup
   });
   let stdout = ''; let stderr = '';
