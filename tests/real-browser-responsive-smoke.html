@@ -28,7 +28,13 @@ function inspect(){
  if(doc.querySelectorAll('#html-universe [data-node-id]').length<147)throw new Error('semantic node surface count');
  const visual=doc.querySelector('#webgl-universe'),renderMode=visual?.dataset.renderMode;
  if(mode==='default'){
-  const canvas=visual?.querySelector('canvas');if(renderMode!=='three'||!canvas||canvas.width!==960||canvas.height!==720||canvas.getAttribute('aria-hidden')!=='true')throw new Error(`default render:${renderMode||'missing'}`);
+  const canvas=visual?.querySelector('canvas');
+  if(renderMode!=='three'||!canvas||canvas.getAttribute('aria-hidden')!=='true')throw new Error(`default render:${renderMode||'missing'}`);
+  if(visual?.dataset.renderRuntime!=='managed')throw new Error(`default runtime ownership:${visual?.dataset.renderRuntime||'missing'}`);
+  const box=visual.getBoundingClientRect();
+  const ratio=Number.isFinite(win.devicePixelRatio)&&win.devicePixelRatio>0?win.devicePixelRatio:1,dpr=Math.min(2,Math.max(1,ratio));
+  const expectedWidth=Math.floor(Math.max(1,Math.floor(box.width))*dpr),expectedHeight=Math.floor(Math.max(1,Math.floor(box.height))*dpr);
+  if(canvas.width!==expectedWidth||canvas.height!==expectedHeight)throw new Error(`default canvas viewport:${canvas.width}x${canvas.height}/${expectedWidth}x${expectedHeight}@${dpr}`);
  }
  if(mode==='fallback'){
   const svg=visual?.querySelector('svg');if(renderMode!=='fallback'||!svg)throw new Error(`fallback render:${renderMode||'missing'}`);
