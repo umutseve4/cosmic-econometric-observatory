@@ -8,6 +8,8 @@ import { deriveThreeSelectionStyling, summarizeThreeSelectionStyling } from './m
 import { deriveFocusBounds, deriveFocusCamera, summarizeFocusTarget } from './modules/three-focus-target.js';
 import { applyNodeSelectionTransition, bindNodeSelectionSurface, createNodeSelectionController } from './modules/browser-node-selection.js';
 import { deriveDirectRelations } from './modules/direct-relations.js';
+import { createWatchdogFrameSource } from './modules/frame-scheduler.js';
+import { evaluatePixelEvidence } from './modules/pixel-evidence.js';
 import { project } from './modules/projections.js';
 
 const result = document.querySelector('#result');
@@ -23,12 +25,13 @@ try {
   const htmlReceipt = renderProjection(project(scene, 'html'), htmlTarget, { dom });
   let threeRuntime = null;
   let threeHandle = null;
+  const pixelEvidence = createPixelEvidenceRecorder(visualTarget, query.get('responsive-smoke') === '1', () => threeRuntime);
   const threePort = forceFallback
     ? Object.freeze({ prepareThree() { throw new Error('M3I_FORCED_THREE_PREPARATION_FAILURE'); } })
     : createBrowserThreePort(document, THREE, {
         onRuntimeReady(handle) {
           try {
-            threeRuntime = createManagedThreeRuntime(handle, createViewportEnvironment(visualTarget));
+            threeRuntime = createManagedThreeRuntime(pixelEvidence.wrapHandle(handle), createViewportEnvironment(visualTarget));
             threeHandle = handle;
           } catch {
             threeRuntime = null;
@@ -69,7 +72,7 @@ try {
   else if (visualTarget.querySelector('canvas')?.getAttribute('aria-hidden') !== 'true') throw new Error('three canvas accessibility boundary');
 
   const paintThreeSelection = createThreeSelectionPainter(artifact.scene, visualTarget, () => threeHandle, () => threeRuntime);
-  const focusThreeCamera = createThreeFocusController(artifact.scene, visualTarget, () => threeRuntime);
+  const focusThreeCamera = createThreeFocusController(artifact.scene, visualTarget, () => threeRuntime, pixelEvidence.arm);
   const explorerInspector = configureExplorer(artifact, controller, scene.inputHash, htmlTarget, visualTarget, visualReceipt.outcome);
   updateInspector = (selectedId) => { explorerInspector(selectedId); paintThreeSelection(selectedId); focusThreeCamera(selectedId); };
   updateInspector(null);
@@ -102,13 +105,12 @@ async function loadArtifact() {
 }
 
 /**
- * Frames are requested from `requestAnimationFrame`, but a browser is free to stop
- * delivering them: a throttled, hidden, offscreen or headless document can leave a
- * requested frame pending forever. The single-frame scheduler only keeps one frame in
- * flight, so a frame that never arrives silently freezes every later `invalidate()` —
- * selection, focus and resize would compute correctly and never be drawn. A watchdog
- * timer therefore races every animation frame and delivers the callback exactly once,
- * whichever clock wins first.
+ * The frame race itself lives in `modules/frame-scheduler.js`: `requestAnimationFrame` is
+ * the only correct clock for painting, but a throttled, hidden, offscreen or headless
+ * document may never call it back, and one undelivered frame would silently freeze every
+ * later `invalidate()`. A watchdog timer therefore races every animation frame, delivers
+ * the callback exactly once, and parks the frame instead of painting when the document is
+ * hidden. This function only supplies the browser clocks it needs.
  *
  * The scene is static: nothing animates between interactions, so frames are produced
  * on demand only. That is also what `prefers-reduced-motion` asks for, which is why the
@@ -116,39 +118,16 @@ async function loadArtifact() {
  * continuous render loop nobody needs. When real animation lands, this is the single
  * place that has to consult the media query again.
  */
-function createViewportEnvironment(container) {
-  const watchdogMs = 80;
-  const pendingFrames = new Map();
-  let frameSequence = 0;
+function createViewportEnvironment(container, watchdogMs) {
+  const frames = createWatchdogFrameSource(createBrowserFramePorts(), watchdogMs);
   return {
     measure() {
       const rect = container.getBoundingClientRect();
       return { width: rect.width, height: rect.height };
     },
     devicePixelRatio() { return Number.isFinite(window.devicePixelRatio) && window.devicePixelRatio > 0 ? window.devicePixelRatio : 1; },
-    requestFrame(callback) {
-      frameSequence += 1;
-      const handle = frameSequence;
-      let animationFrame = 0;
-      let timer = 0;
-      const cancelBoth = () => { window.cancelAnimationFrame(animationFrame); window.clearTimeout(timer); };
-      const settle = (time) => {
-        if (!pendingFrames.has(handle)) return;
-        pendingFrames.delete(handle);
-        cancelBoth();
-        callback(time);
-      };
-      pendingFrames.set(handle, cancelBoth);
-      animationFrame = window.requestAnimationFrame((time) => settle(time));
-      timer = window.setTimeout(() => settle(monotonicNow()), watchdogMs);
-      return handle;
-    },
-    cancelFrame(handle) {
-      const cancel = pendingFrames.get(handle);
-      if (cancel === undefined) return;
-      pendingFrames.delete(handle);
-      cancel();
-    },
+    requestFrame(callback) { return frames.requestFrame(callback); },
+    cancelFrame(handle) { frames.cancelFrame(handle); },
     observeResize(listener) {
       const handler = () => listener();
       window.addEventListener('resize', handler);
@@ -158,6 +137,28 @@ function createViewportEnvironment(container) {
       return () => { window.removeEventListener('resize', handler); observer.disconnect(); };
     },
     prefersReducedMotion() { return true; }
+  };
+}
+
+/**
+ * Binds the frame scheduler to the real browser clocks. `visibilityState` is read through
+ * an explicit `=== 'hidden'` test so a document that never exposes it (older embedders,
+ * some headless shells) is treated as visible and keeps the pre-existing behaviour rather
+ * than parking every frame forever.
+ */
+function createBrowserFramePorts() {
+  return {
+    requestAnimationFrame: (callback) => window.requestAnimationFrame(callback),
+    cancelAnimationFrame: (handle) => window.cancelAnimationFrame(handle),
+    setTimeout: (callback, delayMs) => window.setTimeout(callback, delayMs),
+    clearTimeout: (handle) => window.clearTimeout(handle),
+    now: () => monotonicNow(),
+    isHidden: () => document.visibilityState === 'hidden',
+    onVisibilityChange: (listener) => {
+      if (typeof document.addEventListener !== 'function') return () => {};
+      document.addEventListener('visibilitychange', listener);
+      return () => document.removeEventListener('visibilitychange', listener);
+    }
   };
 }
 
@@ -277,7 +278,7 @@ function createThreeSelectionPainter(sceneIr, visualTarget, readHandle, readRunt
  * counts the frames the renderer had already drawn when this selection was applied, so
  * a later selection proves the previous one actually reached the screen.
  */
-function createThreeFocusController(sceneIr, visualTarget, readRuntime) {
+function createThreeFocusController(sceneIr, visualTarget, readRuntime, armPixelEvidence) {
   const round = (value) => Number(value.toFixed(4));
   return (selectedId) => {
     const runtime = readRuntime();
@@ -288,6 +289,9 @@ function createThreeFocusController(sceneIr, visualTarget, readRuntime) {
     try {
       const focus = selectedId === null ? null : deriveFocusBounds(sceneIr, selectedId);
       const accepted = runtime.focusBounds(focus === null ? null : focus.bounds);
+      // Armed after the camera moved but before the scheduled frame runs, so the
+      // baseline and sentinel are captured from the state this focus produced.
+      armPixelEvidence();
       const state = runtime.state();
       const aspect = state.viewport === null ? 4 / 3 : state.viewport.aspect;
       const expected = summarizeFocusTarget(focus, deriveFocusCamera(focus, 50, aspect, 1.2));
@@ -307,6 +311,151 @@ function createThreeFocusController(sceneIr, visualTarget, readRuntime) {
       visualTarget.dataset.threeFocus = 'unavailable';
     }
   };
+}
+
+/**
+ * Records readback proof that the renderer painted real pixels, replacing the
+ * runtime's self-reported frame counter as the browser smoke's acceptance
+ * oracle. A counter incremented next to `renderer.render(...)` only proves a
+ * code path ran; these buffers prove the drawing buffer actually changed.
+ *
+ * Installed only when the responsive smoke asks for it, so production keeps its
+ * exact frame path, cost and clear behaviour. `preserveDrawingBuffer` stays at
+ * its production default of `false`, which is why every read happens
+ * synchronously in the same task as the draw that produced it, and never from a
+ * later task or microtask where the buffer may already have been discarded.
+ *
+ * State changes go through the renderer's own API rather than raw GL calls so
+ * Three's internal state cache is never corrupted; `readPixels` is read-only.
+ */
+function createPixelEvidenceRecorder(visualTarget, enabled, readRuntime) {
+  const SAMPLE_EDGE = 256;
+  const CAPTURE_TIMEOUT_MS = 4000;
+  const MAX_REARMS = 5;
+  let renderer = null;
+  let pending = null;
+  let rearms = 0;
+
+  const publish = (report) => { visualTarget.dataset.pixelEvidence = JSON.stringify(report); };
+
+  const readCentredRegion = (gl) => {
+    const width = Math.max(0, Math.min(SAMPLE_EDGE, gl.drawingBufferWidth));
+    const height = Math.max(0, Math.min(SAMPLE_EDGE, gl.drawingBufferHeight));
+    const buffer = new Uint8Array(width * height * 4);
+    if (width > 0 && height > 0) {
+      gl.readPixels(
+        Math.floor((gl.drawingBufferWidth - width) / 2),
+        Math.floor((gl.drawingBufferHeight - height) / 2),
+        width, height, gl.RGBA, gl.UNSIGNED_BYTE, buffer
+      );
+    }
+    return { buffer, width, height };
+  };
+
+  const capture = () => {
+    if (pending === null || renderer === null) return;
+    const gl = renderer.getContext();
+    const region = readCentredRegion(gl);
+    // A responsive resize between arming and rendering changes the drawing
+    // buffer, so the baselines and the frame would describe different
+    // geometries. Re-arm on the new geometry instead of comparing buffers that
+    // are not comparable; bounded so a permanently flapping layout still fails.
+    if (region.width !== pending.width || region.height !== pending.height) {
+      if (rearms < MAX_REARMS) {
+        rearms += 1;
+        arm(true);
+        window.setTimeout(() => { readRuntime()?.invalidate(); }, 0);
+        return;
+      }
+    }
+    if (pending.frameOne === null) {
+      pending.frameOne = region.buffer;
+      // The second render is requested from a fresh task so the scheduler is
+      // never re-entered from inside its own render callback.
+      window.setTimeout(() => { readRuntime()?.invalidate(); }, 0);
+      return;
+    }
+    const buffers = { blank: pending.blank, sentinel: pending.sentinel, frameOne: pending.frameOne, frameTwo: region.buffer };
+    window.clearTimeout(pending.timer);
+    pending = null;
+    publish(evaluatePixelEvidence(buffers, {
+      width: region.width,
+      height: region.height,
+      contextLost: gl.isContextLost(),
+      completedRender: true,
+      timedOut: false,
+      glError: gl.getError()
+    }));
+  };
+
+  const arm = (isRearm) => {
+    if (!enabled || renderer === null) return;
+    if (isRearm !== true) rearms = 0;
+    try {
+      if (pending !== null) window.clearTimeout(pending.timer);
+      pending = null;
+      delete visualTarget.dataset.pixelEvidence;
+      renderer.setRenderTarget(null);
+      const gl = renderer.getContext();
+      const restoreColor = new THREE.Color();
+      renderer.getClearColor(restoreColor);
+      const restoreAlpha = renderer.getClearAlpha();
+
+      renderer.clear();
+      const blank = readCentredRegion(gl);
+
+      // Inverting the observed baseline guarantees a sentinel differing from it
+      // in every channel: an 8-bit component can never equal 255 minus itself.
+      // Opaque alpha keeps the buffer non-zero, so an all-zero read can only
+      // mean the readback itself was refused.
+      renderer.setClearColor(new THREE.Color(
+        (255 - (blank.buffer[0] ?? 0)) / 255,
+        (255 - (blank.buffer[1] ?? 0)) / 255,
+        (255 - (blank.buffer[2] ?? 0)) / 255
+      ), 1);
+      renderer.clear();
+      const sentinel = readCentredRegion(gl);
+      renderer.setClearColor(restoreColor, restoreAlpha);
+
+      pending = {
+        blank: blank.buffer,
+        sentinel: sentinel.buffer,
+        frameOne: null,
+        width: blank.width,
+        height: blank.height,
+        timer: window.setTimeout(() => {
+          pending = null;
+          publish(evaluatePixelEvidence(
+            { blank: blank.buffer, sentinel: sentinel.buffer, frameOne: new Uint8Array(0), frameTwo: new Uint8Array(0) },
+            { width: blank.width, height: blank.height, contextLost: false, completedRender: false, timedOut: true, glError: 0 }
+          ));
+        }, CAPTURE_TIMEOUT_MS)
+      };
+    } catch (error) {
+      pending = null;
+      publish({ passed: false, code: 'PIXEL_EVIDENCE_ARM_FAILED', detail: error instanceof Error ? error.message : String(error) });
+    }
+  };
+
+  return Object.freeze({
+    arm,
+    wrapHandle(handle) {
+      if (!enabled) return handle;
+      renderer = handle.renderer;
+      return Object.freeze({
+        renderer: Object.freeze({
+          setPixelRatio: (value) => handle.renderer.setPixelRatio(value),
+          setSize: (width, height, updateStyle) => handle.renderer.setSize(width, height, updateStyle),
+          dispose: () => handle.renderer.dispose(),
+          render: (scene, camera) => { handle.renderer.render(scene, camera); capture(); }
+        }),
+        scene: handle.scene,
+        camera: handle.camera,
+        bounds: handle.bounds,
+        dispose: () => handle.dispose()
+      });
+    }
+  });
 }
 
 function paintRelationState(root, selectedId, relations) {
