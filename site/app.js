@@ -8,6 +8,7 @@ import { deriveThreeSelectionStyling, summarizeThreeSelectionStyling } from './m
 import { deriveFocusBounds, deriveFocusCamera, summarizeFocusTarget } from './modules/three-focus-target.js';
 import { applyNodeSelectionTransition, bindNodeSelectionSurface, createNodeSelectionController } from './modules/browser-node-selection.js';
 import { deriveDirectRelations } from './modules/direct-relations.js';
+import { createWatchdogFrameSource } from './modules/frame-scheduler.js';
 import { project } from './modules/projections.js';
 
 const result = document.querySelector('#result');
@@ -102,13 +103,12 @@ async function loadArtifact() {
 }
 
 /**
- * Frames are requested from `requestAnimationFrame`, but a browser is free to stop
- * delivering them: a throttled, hidden, offscreen or headless document can leave a
- * requested frame pending forever. The single-frame scheduler only keeps one frame in
- * flight, so a frame that never arrives silently freezes every later `invalidate()` —
- * selection, focus and resize would compute correctly and never be drawn. A watchdog
- * timer therefore races every animation frame and delivers the callback exactly once,
- * whichever clock wins first.
+ * The frame race itself lives in `modules/frame-scheduler.js`: `requestAnimationFrame` is
+ * the only correct clock for painting, but a throttled, hidden, offscreen or headless
+ * document may never call it back, and one undelivered frame would silently freeze every
+ * later `invalidate()`. A watchdog timer therefore races every animation frame, delivers
+ * the callback exactly once, and parks the frame instead of painting when the document is
+ * hidden. This function only supplies the browser clocks it needs.
  *
  * The scene is static: nothing animates between interactions, so frames are produced
  * on demand only. That is also what `prefers-reduced-motion` asks for, which is why the
@@ -116,39 +116,16 @@ async function loadArtifact() {
  * continuous render loop nobody needs. When real animation lands, this is the single
  * place that has to consult the media query again.
  */
-function createViewportEnvironment(container) {
-  const watchdogMs = 80;
-  const pendingFrames = new Map();
-  let frameSequence = 0;
+function createViewportEnvironment(container, watchdogMs) {
+  const frames = createWatchdogFrameSource(createBrowserFramePorts(), watchdogMs);
   return {
     measure() {
       const rect = container.getBoundingClientRect();
       return { width: rect.width, height: rect.height };
     },
     devicePixelRatio() { return Number.isFinite(window.devicePixelRatio) && window.devicePixelRatio > 0 ? window.devicePixelRatio : 1; },
-    requestFrame(callback) {
-      frameSequence += 1;
-      const handle = frameSequence;
-      let animationFrame = 0;
-      let timer = 0;
-      const cancelBoth = () => { window.cancelAnimationFrame(animationFrame); window.clearTimeout(timer); };
-      const settle = (time) => {
-        if (!pendingFrames.has(handle)) return;
-        pendingFrames.delete(handle);
-        cancelBoth();
-        callback(time);
-      };
-      pendingFrames.set(handle, cancelBoth);
-      animationFrame = window.requestAnimationFrame((time) => settle(time));
-      timer = window.setTimeout(() => settle(monotonicNow()), watchdogMs);
-      return handle;
-    },
-    cancelFrame(handle) {
-      const cancel = pendingFrames.get(handle);
-      if (cancel === undefined) return;
-      pendingFrames.delete(handle);
-      cancel();
-    },
+    requestFrame(callback) { return frames.requestFrame(callback); },
+    cancelFrame(handle) { frames.cancelFrame(handle); },
     observeResize(listener) {
       const handler = () => listener();
       window.addEventListener('resize', handler);
@@ -158,6 +135,28 @@ function createViewportEnvironment(container) {
       return () => { window.removeEventListener('resize', handler); observer.disconnect(); };
     },
     prefersReducedMotion() { return true; }
+  };
+}
+
+/**
+ * Binds the frame scheduler to the real browser clocks. `visibilityState` is read through
+ * an explicit `=== 'hidden'` test so a document that never exposes it (older embedders,
+ * some headless shells) is treated as visible and keeps the pre-existing behaviour rather
+ * than parking every frame forever.
+ */
+function createBrowserFramePorts() {
+  return {
+    requestAnimationFrame: (callback) => window.requestAnimationFrame(callback),
+    cancelAnimationFrame: (handle) => window.cancelAnimationFrame(handle),
+    setTimeout: (callback, delayMs) => window.setTimeout(callback, delayMs),
+    clearTimeout: (handle) => window.clearTimeout(handle),
+    now: () => monotonicNow(),
+    isHidden: () => document.visibilityState === 'hidden',
+    onVisibilityChange: (listener) => {
+      if (typeof document.addEventListener !== 'function') return () => {};
+      document.addEventListener('visibilitychange', listener);
+      return () => document.removeEventListener('visibilitychange', listener);
+    }
   };
 }
 
