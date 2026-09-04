@@ -46,7 +46,7 @@ function inspect(){
  first?.click();
  if(!first||first.getAttribute('aria-current')!=='true'||!doc.querySelector('#course-inspector code'))throw new Error('search selection inspector');
  const semester=doc.querySelector('#semester-filter');semester.value='8';semester.dispatchEvent(new win.Event('change',{bubbles:true}));
- if(first.getAttribute('aria-current')==='true'||!doc.querySelector('#course-inspector .empty-inspector'))throw new Error('filtered selection clear');
+ if(doc.querySelector('#search-results [aria-current="true"]')||!doc.querySelector('#course-inspector .empty-inspector'))throw new Error('filtered selection clear');
  semester.value='';semester.dispatchEvent(new win.Event('change',{bubbles:true}));
  if(doc.querySelectorAll('#search-results button[data-node-id]').length!==144)throw new Error('filter reset');
  if(doc.querySelector('#result')?.textContent?.trim()!=='M3G_SITE_SMOKE_PASS')throw new Error('runtime marker');
