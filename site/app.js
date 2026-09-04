@@ -5,6 +5,7 @@ import { renderThreeWithFallback } from './modules/browser-fallback-orchestrator
 import { createBrowserThreePort } from './modules/browser-three-adapter.js';
 import { createManagedThreeRuntime } from './modules/three-runtime.js';
 import { deriveThreeSelectionStyling, summarizeThreeSelectionStyling } from './modules/three-selection-projection.js';
+import { deriveFocusBounds, deriveFocusCamera, summarizeFocusTarget } from './modules/three-focus-target.js';
 import { applyNodeSelectionTransition, bindNodeSelectionSurface, createNodeSelectionController } from './modules/browser-node-selection.js';
 import { deriveDirectRelations } from './modules/direct-relations.js';
 import { project } from './modules/projections.js';
@@ -68,8 +69,9 @@ try {
   else if (visualTarget.querySelector('canvas')?.getAttribute('aria-hidden') !== 'true') throw new Error('three canvas accessibility boundary');
 
   const paintThreeSelection = createThreeSelectionPainter(artifact.scene, visualTarget, () => threeHandle, () => threeRuntime);
+  const focusThreeCamera = createThreeFocusController(artifact.scene, visualTarget, () => threeRuntime);
   const explorerInspector = configureExplorer(artifact, controller, scene.inputHash, htmlTarget, visualTarget, visualReceipt.outcome);
-  updateInspector = (selectedId) => { explorerInspector(selectedId); paintThreeSelection(selectedId); };
+  updateInspector = (selectedId) => { explorerInspector(selectedId); paintThreeSelection(selectedId); focusThreeCamera(selectedId); };
   updateInspector(null);
   if (selectionSmoke) {
     runSelectionSmoke(htmlTarget, visualTarget, visualReceipt, controller, scene.inputHash, () => logicalCommits);
@@ -230,6 +232,42 @@ function createThreeSelectionPainter(sceneIr, visualTarget, readHandle, readRunt
       readRuntime()?.invalidate();
     } catch {
       visualTarget.dataset.threeSelection = 'unavailable';
+    }
+  };
+}
+
+/**
+ * Moves the real camera to the selected node's neighbourhood and publishes both the
+ * independently derived expectation and the runtime's actual framing, so the browser
+ * smoke can assert they agree instead of trusting a single code path.
+ */
+function createThreeFocusController(sceneIr, visualTarget, readRuntime) {
+  const round = (value) => Number(value.toFixed(4));
+  return (selectedId) => {
+    const runtime = readRuntime();
+    if (runtime === null || typeof runtime.focusBounds !== 'function') {
+      visualTarget.dataset.threeFocus = 'unavailable';
+      return;
+    }
+    try {
+      const focus = selectedId === null ? null : deriveFocusBounds(sceneIr, selectedId);
+      const accepted = runtime.focusBounds(focus === null ? null : focus.bounds);
+      const state = runtime.state();
+      const aspect = state.viewport === null ? 4 / 3 : state.viewport.aspect;
+      const expected = summarizeFocusTarget(focus, deriveFocusCamera(focus, 50, aspect, 1.2));
+      visualTarget.dataset.threeFocus = JSON.stringify({
+        accepted,
+        expected,
+        actual: {
+          selectedNodeId: state.focused ? selectedId : null,
+          neighborCount: focus === null ? 0 : focus.neighborIds.length,
+          center: state.focused ? { x: round(state.center.x), y: round(state.center.y), z: round(state.center.z) } : null,
+          distance: state.focused ? round(state.distance) : null
+        },
+        renderedFrames: state.frames
+      });
+    } catch {
+      visualTarget.dataset.threeFocus = 'unavailable';
     }
   };
 }
