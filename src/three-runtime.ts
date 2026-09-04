@@ -49,12 +49,15 @@ export interface ThreeRuntimeState {
   readonly maxDistance: number;
   readonly frames: number;
   readonly reducedMotion: boolean;
+  readonly focused: boolean;
+  readonly center: Readonly<{ x: number; y: number; z: number }>;
   readonly disposed: boolean;
 }
 
 export interface ManagedThreeRuntime {
   resize(): boolean;
   fit(): void;
+  focusBounds(bounds: ThreeBounds | null): boolean;
   setZoomDistance(distance: number): number;
   zoomBy(factor: number): number;
   invalidate(): void;
@@ -67,7 +70,13 @@ const DEFAULT_FIELD_OF_VIEW_DEGREES = 50;
 const DEFAULT_PADDING = 1.2;
 const DEFAULT_MIN_ZOOM_FACTOR = 0.4;
 const DEFAULT_MAX_ZOOM_FACTOR = 3;
+const FALLBACK_ASPECT = 4 / 3;
 const ORBIT_DIRECTION = Object.freeze({ x: 0, y: 1 / Math.sqrt(5), z: 2 / Math.sqrt(5) });
+
+function isUsableBounds(bounds: ThreeBounds): boolean {
+  const values = [bounds.minX, bounds.maxX, bounds.minY, bounds.maxY, bounds.minZ, bounds.maxZ];
+  return values.every(Number.isFinite) && bounds.minX <= bounds.maxX && bounds.minY <= bounds.maxY && bounds.minZ <= bounds.maxZ;
+}
 
 export function createManagedThreeRuntime(
   handle: ThreeRuntimeHandle,
@@ -89,9 +98,13 @@ export function createManagedThreeRuntime(
   let disposed = false;
   let frames = 0;
   let viewport: ThreeViewport | null = null;
-  let fit = fitThreeCamera(handle.bounds, fieldOfViewDegrees, 4 / 3, padding);
+  let focusOverride: ThreeBounds | null = null;
+  let fit = fitThreeCamera(handle.bounds, fieldOfViewDegrees, FALLBACK_ASPECT, padding);
   let baseDistance = fit.distance;
   let distance = fit.distance;
+
+  const activeBounds = (): ThreeBounds => focusOverride ?? handle.bounds;
+  const activeAspect = (): number => viewport?.aspect ?? FALLBACK_ASPECT;
 
   const scheduler: SingleFrameScheduler = createSingleFrameScheduler({
     requestFrame: (callback) => environment.requestFrame(callback),
@@ -114,9 +127,9 @@ export function createManagedThreeRuntime(
     handle.camera.updateProjectionMatrix();
   };
 
-  const recompute = (aspect: number): void => {
-    const ratio = baseDistance === 0 ? 1 : distance / baseDistance;
-    fit = fitThreeCamera(handle.bounds, fieldOfViewDegrees, aspect, padding);
+  const recompute = (aspect: number, preserveZoom = true): void => {
+    const ratio = preserveZoom && baseDistance !== 0 ? distance / baseDistance : 1;
+    fit = fitThreeCamera(activeBounds(), fieldOfViewDegrees, aspect, padding);
     baseDistance = fit.distance;
     distance = clampThreeZoom(baseDistance * ratio, baseDistance * minZoomFactor, baseDistance * maxZoomFactor);
     applyCamera();
@@ -165,6 +178,30 @@ export function createManagedThreeRuntime(
       applyCamera();
       scheduler.invalidate();
     },
+    /**
+     * Frames an explicit sub-volume of the scene, or returns to the whole-scene
+     * framing when given `null`. Unusable bounds are rejected with `false` rather
+     * than thrown, so a bad focus request can never break the render loop. The
+     * zoom ratio is intentionally reset so the requested volume is fully framed.
+     * Returns `false` when the request was rejected or changed nothing.
+     */
+    focusBounds(bounds: ThreeBounds | null): boolean {
+      if (disposed) return false;
+      if (bounds === null) {
+        if (focusOverride === null) return false;
+        focusOverride = null;
+      } else {
+        if (typeof bounds !== 'object' || !isUsableBounds(bounds)) return false;
+        focusOverride = Object.freeze({
+          minX: bounds.minX, maxX: bounds.maxX,
+          minY: bounds.minY, maxY: bounds.maxY,
+          minZ: bounds.minZ, maxZ: bounds.maxZ
+        });
+      }
+      recompute(activeAspect(), false);
+      scheduler.invalidate();
+      return true;
+    },
     setZoomDistance,
     zoomBy(factor: number): number {
       if (disposed) return distance;
@@ -185,6 +222,8 @@ export function createManagedThreeRuntime(
         maxDistance: baseDistance * maxZoomFactor,
         frames,
         reducedMotion: scheduler.state().reducedMotion,
+        focused: focusOverride !== null,
+        center: Object.freeze({ x: fit.center.x, y: fit.center.y, z: fit.center.z }),
         disposed
       });
     },
