@@ -3,6 +3,7 @@ import { createBrowserDomPort } from './modules/browser-dom-adapter.js';
 import { renderProjection } from './modules/browser-renderer.js';
 import { renderThreeWithFallback } from './modules/browser-fallback-orchestrator.js';
 import { createBrowserThreePort } from './modules/browser-three-adapter.js';
+import { createManagedThreeRuntime } from './modules/three-runtime.js';
 import { applyNodeSelectionTransition, bindNodeSelectionSurface, createNodeSelectionController } from './modules/browser-node-selection.js';
 import { deriveDirectRelations } from './modules/direct-relations.js';
 import { project } from './modules/projections.js';
@@ -18,15 +19,30 @@ try {
   const htmlTarget = required('#html-universe');
   const visualTarget = required('#webgl-universe');
   const htmlReceipt = renderProjection(project(scene, 'html'), htmlTarget, { dom });
+  let threeRuntime = null;
   const threePort = forceFallback
     ? Object.freeze({ prepareThree() { throw new Error('M3I_FORCED_THREE_PREPARATION_FAILURE'); } })
-    : createBrowserThreePort(document, THREE);
+    : createBrowserThreePort(document, THREE, {
+        onRuntimeReady(handle) {
+          try {
+            threeRuntime = createManagedThreeRuntime(handle, createViewportEnvironment(visualTarget));
+          } catch {
+            threeRuntime = null;
+            handle.dispose();
+          }
+        }
+      });
   const visualReceipt = renderThreeWithFallback(project(scene, 'three'), project(scene, 'svg'), visualTarget, { dom, three: threePort });
   if (forceFallback && (visualReceipt.outcome !== 'fallback' || visualReceipt.fallbackProjection !== 'svg' || visualReceipt.primaryFailure !== 'BROWSER_RENDER_INVALID_CONTENT:three:prepare-failed')) throw new Error('forced fallback provenance');
   const visualReady = visualReceipt.outcome === 'three' ? visualTarget.querySelector('canvas')?.dataset.frame === 'rendered' : visualTarget.querySelector('svg') !== null;
   if (htmlReceipt.nodeIds.length !== 147 || htmlReceipt.edgeIds.length !== 146 || visualReceipt.render.nodeIds.length !== 147 || visualReceipt.render.edgeIds.length !== 146 || !visualReady) throw new Error('artifact semantic parity');
   if (!sameSet(htmlReceipt.nodeIds, visualReceipt.render.nodeIds) || !sameSet(htmlReceipt.edgeIds, visualReceipt.render.edgeIds)) throw new Error('projection identity parity');
   visualTarget.dataset.renderMode = visualReceipt.outcome;
+  visualTarget.dataset.renderRuntime = threeRuntime === null ? 'static' : 'managed';
+  if (threeRuntime !== null) {
+    threeRuntime.resize();
+    window.addEventListener('pagehide', () => { threeRuntime?.dispose(); threeRuntime = null; }, { once: true });
+  }
   required('#metric-nodes').textContent = String(artifact.oracle.nodes);
   required('#metric-edges').textContent = String(artifact.oracle.edges);
   required('#metric-courses').textContent = String(artifact.oracle.curriculum_relations);
@@ -75,6 +91,36 @@ async function loadArtifact() {
   if (value.scene.edges.some(({ source, target }) => !nodeRegistry.has(source) || !nodeRegistry.has(target)) || ids.some((id) => !nodeRegistry.has(id))) throw new Error('artifact referential integrity');
   if (value.courses.some((course) => !course.code || !course.title || !Number.isInteger(course.semester) || course.semester < 1 || course.semester > 8 || !['required', 'elective'].includes(course.status) || !Number.isFinite(course.ects) || course.ects < 0 || !course.relationId || !course.provenance?.sourceId || !course.provenance?.snapshotId || !course.provenance?.locator || !course.provenance?.observedAt || !/^sha256:[0-9a-f]{64}$/u.test(course.provenance?.contentHash || ''))) throw new Error('artifact courses');
   return value;
+}
+
+function createViewportEnvironment(container) {
+  const reducedMotionQuery = typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+  return {
+    measure() {
+      const rect = container.getBoundingClientRect();
+      return { width: rect.width, height: rect.height };
+    },
+    devicePixelRatio() { return Number.isFinite(window.devicePixelRatio) && window.devicePixelRatio > 0 ? window.devicePixelRatio : 1; },
+    requestFrame(callback) { return window.requestAnimationFrame(callback); },
+    cancelFrame(handle) { window.cancelAnimationFrame(handle); },
+    observeResize(listener) {
+      if (typeof ResizeObserver !== 'function') {
+        const handler = () => listener();
+        window.addEventListener('resize', handler);
+        return () => window.removeEventListener('resize', handler);
+      }
+      const observer = new ResizeObserver(() => listener());
+      observer.observe(container);
+      return () => observer.disconnect();
+    },
+    prefersReducedMotion() { return reducedMotionQuery === null ? true : reducedMotionQuery.matches === true; },
+    observeReducedMotion(listener) {
+      if (reducedMotionQuery === null || typeof reducedMotionQuery.addEventListener !== 'function') return () => {};
+      const handler = (event) => listener(event.matches === true);
+      reducedMotionQuery.addEventListener('change', handler);
+      return () => reducedMotionQuery.removeEventListener('change', handler);
+    }
+  };
 }
 
 function configureExplorer(artifact, controller, snapshotId, htmlTarget, visualTarget, visualOutcome) {

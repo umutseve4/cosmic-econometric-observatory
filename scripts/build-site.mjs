@@ -23,6 +23,8 @@ const copies = new Map([
   ['dist/src/browser-dom-adapter.js', 'modules/browser-dom-adapter.js'],
   ['dist/src/browser-three-adapter.js', 'modules/browser-three-adapter.js'],
   ['dist/src/browser-node-selection.js', 'modules/browser-node-selection.js'],
+  ['dist/src/three-viewport-lifecycle.js', 'modules/three-viewport-lifecycle.js'],
+  ['dist/src/three-runtime.js', 'modules/three-runtime.js'],
   ['node_modules/three/build/three.core.js', 'vendor/three.core.js'],
   ['node_modules/three/build/three.module.js', 'vendor/three.module.js']
 ]);
