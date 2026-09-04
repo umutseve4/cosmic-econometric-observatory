@@ -101,16 +101,54 @@ async function loadArtifact() {
   return value;
 }
 
+/**
+ * Frames are requested from `requestAnimationFrame`, but a browser is free to stop
+ * delivering them: a throttled, hidden, offscreen or headless document can leave a
+ * requested frame pending forever. The single-frame scheduler only keeps one frame in
+ * flight, so a frame that never arrives would silently freeze every later
+ * `invalidate()` — selection, focus and resize would compute correctly and never be
+ * drawn. A watchdog timer therefore races every animation frame and delivers the
+ * callback exactly once, whichever clock wins.
+ *
+ * The scene is static: nothing animates between interactions, so frames are produced
+ * on demand only. That is also the behaviour `prefers-reduced-motion` asks for, which
+ * is why the runtime is started in reduced-motion mode unconditionally instead of
+ * running a continuous render loop nobody needs.
+ */
+const FRAME_WATCHDOG_MS = 80;
+
 function createViewportEnvironment(container) {
-  const reducedMotionQuery = typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+  const pendingFrames = new Map();
+  let frameSequence = 0;
   return {
     measure() {
       const rect = container.getBoundingClientRect();
       return { width: rect.width, height: rect.height };
     },
     devicePixelRatio() { return Number.isFinite(window.devicePixelRatio) && window.devicePixelRatio > 0 ? window.devicePixelRatio : 1; },
-    requestFrame(callback) { return window.requestAnimationFrame(callback); },
-    cancelFrame(handle) { window.cancelAnimationFrame(handle); },
+    requestFrame(callback) {
+      frameSequence += 1;
+      const handle = frameSequence;
+      let animationFrame = 0;
+      let timer = 0;
+      const settle = (time) => {
+        if (!pendingFrames.has(handle)) return;
+        pendingFrames.delete(handle);
+        window.cancelAnimationFrame(animationFrame);
+        window.clearTimeout(timer);
+        callback(time);
+      };
+      pendingFrames.set(handle, () => { window.cancelAnimationFrame(animationFrame); window.clearTimeout(timer); });
+      animationFrame = window.requestAnimationFrame((time) => settle(time));
+      timer = window.setTimeout(() => settle(now()), FRAME_WATCHDOG_MS);
+      return handle;
+    },
+    cancelFrame(handle) {
+      const cancel = pendingFrames.get(handle);
+      if (cancel === undefined) return;
+      pendingFrames.delete(handle);
+      cancel();
+    },
     observeResize(listener) {
       const handler = () => listener();
       window.addEventListener('resize', handler);
@@ -119,15 +157,11 @@ function createViewportEnvironment(container) {
       observer.observe(container);
       return () => { window.removeEventListener('resize', handler); observer.disconnect(); };
     },
-    prefersReducedMotion() { return reducedMotionQuery === null ? true : reducedMotionQuery.matches === true; },
-    observeReducedMotion(listener) {
-      if (reducedMotionQuery === null || typeof reducedMotionQuery.addEventListener !== 'function') return () => {};
-      const handler = (event) => listener(event.matches === true);
-      reducedMotionQuery.addEventListener('change', handler);
-      return () => reducedMotionQuery.removeEventListener('change', handler);
-    }
+    prefersReducedMotion() { return true; }
   };
 }
+
+function now() { return typeof performance === 'object' && typeof performance.now === 'function' ? performance.now() : Date.now(); }
 
 function configureExplorer(artifact, controller, snapshotId, htmlTarget, visualTarget, visualOutcome) {
   const input = required('#course-search');
@@ -239,7 +273,9 @@ function createThreeSelectionPainter(sceneIr, visualTarget, readHandle, readRunt
 /**
  * Moves the real camera to the selected node's neighbourhood and publishes both the
  * independently derived expectation and the runtime's actual framing, so the browser
- * smoke can assert they agree instead of trusting a single code path.
+ * smoke can assert they agree instead of trusting a single code path. `renderedFrames`
+ * is the count of frames the renderer had already drawn when this selection was
+ * applied; a later selection therefore proves the previous one reached the screen.
  */
 function createThreeFocusController(sceneIr, visualTarget, readRuntime) {
   const round = (value) => Number(value.toFixed(4));
@@ -264,7 +300,8 @@ function createThreeFocusController(sceneIr, visualTarget, readRuntime) {
           center: state.focused ? { x: round(state.center.x), y: round(state.center.y), z: round(state.center.z) } : null,
           distance: state.focused ? round(state.distance) : null
         },
-        renderedFrames: state.frames
+        renderedFrames: state.frames,
+        reducedMotion: state.reducedMotion
       });
     } catch {
       visualTarget.dataset.threeFocus = 'unavailable';
