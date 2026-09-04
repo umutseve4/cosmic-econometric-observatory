@@ -6,7 +6,7 @@ function scene(edges: SceneIR['edges']): SceneIR {
   const ids = ['A', 'B', 'C', 'D'];
   return {
     schemaVersion: '0.1.0', layoutVersion: 'test', seed: 'test', inputHash: `sha256:${'a'.repeat(64)}`,
-    nodes: ids.map((id, index) => ({ id, semanticKind: 'test', label: id, position: { x: index, y: 0, z: 0 }, focusOrder: index + 1, capabilities: ['inspect', 'navigate'] })),
+    nodes: ids.map((id, index) => ({ id, semanticKind: 'test', label: id, position: { x: index, y: 0, z: 0 }, focusOrder: index + 1, capabilities: ['inspect', 'navigate'] as const })),
     edges
   };
 }
@@ -34,6 +34,14 @@ test('keeps self loops directional once and parallel edge identities separately'
   assert.deepEqual(relations.incoming.map(({ edgeId }) => edgeId), ['self', 'one', 'two']);
   assert.deepEqual(relations.outgoing.map(({ edgeId }) => edgeId), ['self']);
   assert.deepEqual(relations.highlightedEdgeIds, ['self', 'one', 'two']);
+  assert.deepEqual(relations.relatedNodeIds, ['A']);
+});
+
+test('keeps bidirectional edges separated by direction', () => {
+  const relations = deriveDirectRelations(scene([edge('A-B', 'A', 'B'), edge('B-A', 'B', 'A')]), 'B');
+  assert.deepEqual(relations.incoming.map(({ edgeId }) => edgeId), ['A-B']);
+  assert.deepEqual(relations.outgoing.map(({ edgeId }) => edgeId), ['B-A']);
+  assert.deepEqual(relations.highlightedEdgeIds, ['A-B', 'B-A']);
   assert.deepEqual(relations.relatedNodeIds, ['A']);
 });
 
