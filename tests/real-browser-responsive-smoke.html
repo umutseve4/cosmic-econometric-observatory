@@ -14,9 +14,10 @@ function inspect(){
  const doc=frame.contentDocument,win=frame.contentWindow;if(!doc||!win)throw new Error('iframe unavailable');
  frame.style.height=`${Math.max(doc.documentElement.scrollHeight,doc.body.scrollHeight)+1}px`;
  const viewport=doc.documentElement.clientWidth;if(viewport!==requestedWidth)throw new Error(`viewport mismatch:${viewport}/${requestedWidth}`);
- if(doc.documentElement.scrollWidth>viewport||doc.body.scrollWidth>viewport)throw new Error(`horizontal overflow:${viewport}/${doc.documentElement.scrollWidth}/${doc.body.scrollWidth}`);
  const offenders=[...doc.body.querySelectorAll('*')].filter((element)=>{if(element.matches('script,style,[hidden],.ambient-one,.ambient-two'))return false;const style=win.getComputedStyle(element);if(style.display==='none'||style.visibility==='hidden'||style.position==='fixed')return false;const rect=element.getBoundingClientRect();return rect.width>0&&(rect.left<-1||rect.right>viewport+1)});
- if(offenders.length)throw new Error(`clipped elements:${offenders.slice(0,5).map((e)=>e.id||e.className||e.tagName).join(',')}`);
+ const offenderLabels=offenders.slice(0,5).map((e)=>e.id||e.className||e.tagName).join(',');
+ if(doc.documentElement.scrollWidth>viewport||doc.body.scrollWidth>viewport)throw new Error(`horizontal overflow:${viewport}/${doc.documentElement.scrollWidth}/${doc.body.scrollWidth}:${offenderLabels||'no-visible-offender'}`);
+ if(offenders.length)throw new Error(`clipped elements:${offenderLabels}`);
  for(const selector of ['#course-search','#semester-filter','#status-filter','#search-results','#course-inspector','#html-universe'])if(!doc.querySelector(selector))throw new Error(`missing product control:${selector}`);
  if(doc.querySelectorAll('#search-results button[data-node-id]').length!==144)throw new Error('course result count');
  if(doc.querySelectorAll('#html-universe [data-node-id]').length<147)throw new Error('semantic node surface count');
