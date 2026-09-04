@@ -95,19 +95,18 @@ function inspect(){
 }
 function visualBox(doc){const visual=doc.querySelector('#webgl-universe');if(!visual)return '0x0';const box=visual.getBoundingClientRect();return `${Math.floor(box.width)}x${Math.floor(box.height)}`}
 function syncFrameHeight(doc){const target=Math.max(doc.documentElement.scrollHeight,doc.body.scrollHeight)+1;frame.style.height=`${target}px`;return target}
-function afterTwoFrames(callback){requestAnimationFrame(()=>requestAnimationFrame(callback))}
 function settle(){
  const doc=frame.contentDocument;if(!doc){fail('iframe unavailable');return}
- const fonts=doc.fonts&&typeof doc.fonts.ready?.then==='function'?doc.fonts.ready:Promise.resolve();
- fonts.then(()=>{
-  let previous='',rounds=0;
-  const step=()=>{
+ const finish=()=>{try{inspect()}catch(error){fail(error instanceof Error?error.message:String(error))}};
+ let previous='',rounds=0;
+ const step=()=>{
+  try{
    const current=`${syncFrameHeight(doc)}|${visualBox(doc)}`;
-   if(current===previous||rounds>=12){afterTwoFrames(()=>{try{inspect()}catch(error){fail(error instanceof Error?error.message:String(error))}});return}
-   previous=current;rounds+=1;afterTwoFrames(step);
-  };
-  step();
- }).catch((error)=>fail(error instanceof Error?error.message:String(error)));
+   if(current===previous||rounds>=20){setTimeout(finish,150);return}
+   previous=current;rounds+=1;setTimeout(step,50);
+  }catch(error){fail(error instanceof Error?error.message:String(error))}
+ };
+ setTimeout(step,50);
 }
 frame.addEventListener('load',()=>{const deadline=Date.now()+30000;const poll=()=>{try{const runtime=frame.contentDocument?.querySelector('#result')?.textContent?.trim()||'';if(runtime==='M3G_SITE_SMOKE_PASS'){settle();return}if(runtime.startsWith('M3G_SITE_SMOKE_FAIL')){fail(runtime);return}if(Date.now()>=deadline){fail(`timeout:${runtime||'missing'}`);return}setTimeout(poll,50)}catch(error){fail(error instanceof Error?error.message:String(error))}};poll()},{once:true});
 frame.addEventListener('error',()=>fail('iframe load error'),{once:true});
