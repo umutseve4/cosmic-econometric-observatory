@@ -34,7 +34,16 @@ function inspect(){
   const paths=[...svg.querySelectorAll('path[data-edge-id]')];if(paths.length!==146||paths.some((path)=>!finitePath(path.getAttribute('d')||'')))throw new Error(`svg edge geometry:${paths.length}`);
   if(svg.querySelectorAll('g[data-node-id]').length!==147)throw new Error('svg node count');
  }
- const search=doc.querySelector('#course-search'),buttons=[...doc.querySelectorAll('#search-results button[data-node-id]')],first=buttons[0],second=buttons[1],last=buttons.at(-1);
+ const search=doc.querySelector('#course-search'),dispatchInput=()=>search.dispatchEvent(new win.Event('input',{bubbles:true}));
+ const firstCode=doc.querySelector('#search-results button[data-node-id] strong')?.textContent?.trim();if(!firstCode)throw new Error('missing first course code');
+ search.value='__NO_SUCH_COURSE__';dispatchInput();search.focus();search.dispatchEvent(new win.KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true}));
+ if(doc.querySelector('#search-results button[data-node-id]')||doc.activeElement!==search)throw new Error('empty result navigation');
+ search.value=firstCode;dispatchInput();const singleton=[...doc.querySelectorAll('#search-results button[data-node-id]')];
+ if(singleton.length!==1)throw new Error(`singleton result:${singleton.length}`);
+ search.focus();search.dispatchEvent(new win.KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true}));
+ singleton[0].dispatchEvent(new win.KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true}));
+ if(doc.activeElement!==singleton[0])throw new Error('singleton result clamp');
+ search.value='';dispatchInput();const buttons=[...doc.querySelectorAll('#search-results button[data-node-id]')],first=buttons[0],second=buttons[1],last=buttons.at(-1);
  search.focus();search.dispatchEvent(new win.KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true}));
  if(doc.activeElement!==first)throw new Error('search ArrowDown entry');
  first.dispatchEvent(new win.KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true}));
