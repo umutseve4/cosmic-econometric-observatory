@@ -72,7 +72,7 @@ function inspect(){
  }
  const curriculumId=semantic.querySelector(`[data-edge-id="${CSS.escape(courseIncomingId)}"]`)?.dataset.source;
  const curriculumLink=semantic.querySelector(`nav [data-node-id="${CSS.escape(curriculumId||'')}"]`);if(!curriculumLink)throw new Error('curriculum selection target');
- curriculumLink.click();
+ curriculumLink.focus();curriculumLink.dispatchEvent(new win.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));
  const hierarchyIncoming=[...doc.querySelectorAll('#course-inspector [data-direction="incoming"][data-edge-id]')];
  const hierarchyOutgoing=[...doc.querySelectorAll('#course-inspector [data-direction="outgoing"][data-edge-id]')];
  const hierarchyCounts={inspectorIncoming:hierarchyIncoming.length,inspectorOutgoing:hierarchyOutgoing.length,semanticIncoming:edgeIds(semantic,'incoming').length,semanticOutgoing:edgeIds(semantic,'outgoing').length,semanticUnrelated:edgeIds(semantic,'unrelated').length};
