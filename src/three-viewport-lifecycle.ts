@@ -95,7 +95,7 @@ export function createSingleFrameScheduler(ports: FrameSchedulerPorts, initialRe
   return Object.freeze({
     start() { if (disposed) return; running = true; schedule(); },
     invalidate() { schedule(); },
-    setReducedMotion(reduced) {
+    setReducedMotion(reduced: boolean) {
       if (disposed || reducedMotion === reduced) return;
       reducedMotion = reduced;
       if (reduced) cancelPending();
