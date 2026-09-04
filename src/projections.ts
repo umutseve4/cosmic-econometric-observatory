@@ -73,7 +73,7 @@ export function project(scene: SceneIR, projection: ProjectionKind): ProjectionM
     `<article id="${escapeMarkup(node.id)}" tabindex="-1" data-node-id="${escapeMarkup(node.id)}" data-semantic-kind="${escapeMarkup(node.semanticKind)}"><h2>${escapeMarkup(node.label)}</h2><p>${escapeMarkup(node.semanticKind)}</p>${closingArticleTag}`
   ).join('');
   const relations = orderedEdges.map((edge) =>
-    `<li data-edge-id="${escapeMarkup(edge.id)}" data-semantic-kind="${escapeMarkup(edge.semanticKind)}"><a href="#${escapeMarkup(edge.source)}">${escapeMarkup(edge.source)}</a> → <a href="#${escapeMarkup(edge.target)}">${escapeMarkup(edge.target)}</a></li>`
+    `<li data-edge-id="${escapeMarkup(edge.id)}" data-semantic-kind="${escapeMarkup(edge.semanticKind)}" data-source="${escapeMarkup(edge.source)}" data-target="${escapeMarkup(edge.target)}"><a href="#${escapeMarkup(edge.source)}">${escapeMarkup(edge.source)}</a> → <a href="#${escapeMarkup(edge.target)}">${escapeMarkup(edge.target)}</a></li>`
   ).join('');
   return { ...common, content: `<nav aria-label="Academic knowledge universe"><ol>${navigation}</ol></nav><main aria-label="Knowledge node details">${details}</main><section aria-label="Relations"><ul>${relations}</ul></section>` };
 }
