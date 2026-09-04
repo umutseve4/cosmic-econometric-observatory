@@ -29,6 +29,38 @@ export interface BrowserThreeRuntime {
 
 export interface BrowserCanvasDocument { createElement(name: 'canvas'): HTMLCanvasElement; }
 
+export interface BrowserThreeSceneBounds {
+  readonly minX: number;
+  readonly maxX: number;
+  readonly minY: number;
+  readonly maxY: number;
+  readonly minZ: number;
+  readonly maxZ: number;
+}
+
+/**
+ * Ownership of a prepared Three scene. Handed to `onRuntimeReady` only after the
+ * first frame has been committed; the receiver becomes responsible for calling
+ * `dispose()` exactly once.
+ */
+export interface BrowserThreeRuntimeHandle {
+  readonly canvas: HTMLCanvasElement;
+  readonly renderer: {
+    setPixelRatio(value: number): void;
+    setSize(width: number, height: number, updateStyle: boolean): void;
+    render(scene: unknown, camera: unknown): void;
+    dispose(): void;
+  };
+  readonly scene: unknown;
+  readonly camera: unknown;
+  readonly bounds: BrowserThreeSceneBounds;
+  dispose(): void;
+}
+
+export interface BrowserThreePortOptions {
+  readonly onRuntimeReady?: (handle: BrowserThreeRuntimeHandle) => void;
+}
+
 type NodePayload = {
   id: string;
   semanticKind: string;
@@ -42,11 +74,13 @@ type ThreePayload = { scene: string; nodes: NodePayload[]; edges: EdgePayload[] 
 
 export function createBrowserThreePort(
   documentLike: BrowserCanvasDocument,
-  runtime: BrowserThreeRuntime
+  runtime: BrowserThreeRuntime,
+  options: BrowserThreePortOptions = {}
 ): BrowserThreePreparationPort<HTMLCanvasElement> {
   return Object.freeze({
     prepareThree(payload: unknown): PreparedBrowserProjection<HTMLCanvasElement> {
       let renderer: RendererLike | undefined;
+      let transferred = false;
       const disposables: DisposableLike[] = [];
       try {
         const canonical = validatePayload(payload);
@@ -88,13 +122,34 @@ export function createBrowserThreePort(
         const extent = Math.max(4, ...canonical.nodes.flatMap(({ position }) => [Math.abs(position.x), Math.abs(position.y), Math.abs(position.z)]));
         camera.position.set(0, extent, extent * 2);
         camera.lookAt(0, 0, 0);
-        renderer = new runtime.WebGLRenderer({ canvas, antialias: false, preserveDrawingBuffer: true });
-        renderer.setPixelRatio(1);
-        renderer.setSize(960, 720, false);
-        renderer.render(scene, camera);
+        const ownedRenderer = new runtime.WebGLRenderer({ canvas, antialias: false, preserveDrawingBuffer: true });
+        renderer = ownedRenderer;
+        ownedRenderer.setPixelRatio(1);
+        ownedRenderer.setSize(960, 720, false);
+        ownedRenderer.render(scene, camera);
         canvas.dataset.frame = 'rendered';
         canvas.dataset.nodeCount = String(canonical.nodes.length);
         canvas.dataset.edgeCount = String(canonical.edges.length);
+
+        if (options.onRuntimeReady) {
+          const owned = [...disposables];
+          let released = false;
+          const handle: BrowserThreeRuntimeHandle = Object.freeze({
+            canvas,
+            renderer: ownedRenderer,
+            scene,
+            camera,
+            bounds: computeBounds(canonical.nodes),
+            dispose(): void {
+              if (released) return;
+              released = true;
+              for (const disposable of owned.reverse()) disposable.dispose();
+              ownedRenderer.dispose();
+            }
+          });
+          options.onRuntimeReady(handle);
+          transferred = true;
+        }
 
         const nodesById = [...canonical.nodes].sort((left, right) => compareCodePoints(left.id, right.id));
         const edgesById = [...canonical.edges].sort((left, right) => compareCodePoints(left.id, right.id));
@@ -109,10 +164,24 @@ export function createBrowserThreePort(
       } catch (error) {
         throw new Error('BROWSER_THREE_PREPARE_FAILED', { cause: error });
       } finally {
-        for (const disposable of disposables.reverse()) disposable.dispose();
-        renderer?.dispose();
+        if (!transferred) {
+          for (const disposable of disposables.reverse()) disposable.dispose();
+          renderer?.dispose();
+        }
       }
     }
+  });
+}
+
+function computeBounds(nodes: readonly NodePayload[]): BrowserThreeSceneBounds {
+  if (nodes.length === 0) return Object.freeze({ minX: 0, maxX: 0, minY: 0, maxY: 0, minZ: 0, maxZ: 0 });
+  const xs = nodes.map(({ position }) => position.x);
+  const ys = nodes.map(({ position }) => position.y);
+  const zs = nodes.map(({ position }) => position.z);
+  return Object.freeze({
+    minX: Math.min(...xs), maxX: Math.max(...xs),
+    minY: Math.min(...ys), maxY: Math.max(...ys),
+    minZ: Math.min(...zs), maxZ: Math.max(...zs)
   });
 }
 
