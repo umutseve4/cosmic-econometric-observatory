@@ -109,7 +109,10 @@ function configureExplorer(artifact, controller, snapshotId) {
   status.addEventListener('change', renderResults);
   renderResults();
   return (selectedId) => {
-    for (const button of list.querySelectorAll('button[data-node-id]')) button.toggleAttribute('aria-current', button.dataset.nodeId === selectedId);
+    for (const button of list.querySelectorAll('button[data-node-id]')) {
+      if (button.dataset.nodeId === selectedId) button.setAttribute('aria-current', 'true');
+      else button.removeAttribute('aria-current');
+    }
     if (selectedId === null) { inspector.innerHTML = '<p class="empty-inspector">Bir ders seçtiğinde dönem, tür, AKTS ve kaynak izi burada görünür.</p>'; return; }
     const course = courseById.get(selectedId);
     const node = nodeById.get(selectedId);
