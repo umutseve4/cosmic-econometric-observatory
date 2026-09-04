@@ -105,19 +105,19 @@ async function loadArtifact() {
  * Frames are requested from `requestAnimationFrame`, but a browser is free to stop
  * delivering them: a throttled, hidden, offscreen or headless document can leave a
  * requested frame pending forever. The single-frame scheduler only keeps one frame in
- * flight, so a frame that never arrives would silently freeze every later
- * `invalidate()` — selection, focus and resize would compute correctly and never be
- * drawn. A watchdog timer therefore races every animation frame and delivers the
- * callback exactly once, whichever clock wins.
+ * flight, so a frame that never arrives silently freezes every later `invalidate()` —
+ * selection, focus and resize would compute correctly and never be drawn. A watchdog
+ * timer therefore races every animation frame and delivers the callback exactly once,
+ * whichever clock wins first.
  *
  * The scene is static: nothing animates between interactions, so frames are produced
- * on demand only. That is also the behaviour `prefers-reduced-motion` asks for, which
- * is why the runtime is started in reduced-motion mode unconditionally instead of
- * running a continuous render loop nobody needs.
+ * on demand only. That is also what `prefers-reduced-motion` asks for, which is why the
+ * runtime is started in reduced-motion mode unconditionally instead of running a
+ * continuous render loop nobody needs. When real animation lands, this is the single
+ * place that has to consult the media query again.
  */
-const FRAME_WATCHDOG_MS = 80;
-
 function createViewportEnvironment(container) {
+  const watchdogMs = 80;
   const pendingFrames = new Map();
   let frameSequence = 0;
   return {
@@ -131,16 +131,16 @@ function createViewportEnvironment(container) {
       const handle = frameSequence;
       let animationFrame = 0;
       let timer = 0;
+      const cancelBoth = () => { window.cancelAnimationFrame(animationFrame); window.clearTimeout(timer); };
       const settle = (time) => {
         if (!pendingFrames.has(handle)) return;
         pendingFrames.delete(handle);
-        window.cancelAnimationFrame(animationFrame);
-        window.clearTimeout(timer);
+        cancelBoth();
         callback(time);
       };
-      pendingFrames.set(handle, () => { window.cancelAnimationFrame(animationFrame); window.clearTimeout(timer); });
+      pendingFrames.set(handle, cancelBoth);
       animationFrame = window.requestAnimationFrame((time) => settle(time));
-      timer = window.setTimeout(() => settle(now()), FRAME_WATCHDOG_MS);
+      timer = window.setTimeout(() => settle(monotonicNow()), watchdogMs);
       return handle;
     },
     cancelFrame(handle) {
@@ -161,7 +161,7 @@ function createViewportEnvironment(container) {
   };
 }
 
-function now() { return typeof performance === 'object' && typeof performance.now === 'function' ? performance.now() : Date.now(); }
+function monotonicNow() { return typeof performance === 'object' && performance !== null && typeof performance.now === 'function' ? performance.now() : Date.now(); }
 
 function configureExplorer(artifact, controller, snapshotId, htmlTarget, visualTarget, visualOutcome) {
   const input = required('#course-search');
@@ -274,8 +274,8 @@ function createThreeSelectionPainter(sceneIr, visualTarget, readHandle, readRunt
  * Moves the real camera to the selected node's neighbourhood and publishes both the
  * independently derived expectation and the runtime's actual framing, so the browser
  * smoke can assert they agree instead of trusting a single code path. `renderedFrames`
- * is the count of frames the renderer had already drawn when this selection was
- * applied; a later selection therefore proves the previous one reached the screen.
+ * counts the frames the renderer had already drawn when this selection was applied, so
+ * a later selection proves the previous one actually reached the screen.
  */
 function createThreeFocusController(sceneIr, visualTarget, readRuntime) {
   const round = (value) => Number(value.toFixed(4));
