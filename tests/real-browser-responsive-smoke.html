@@ -12,6 +12,7 @@ function fail(message){result.textContent=`${FAIL}:${message}`}
 function finitePath(path){return /^M -?\d+(?:\.\d+)? -?\d+(?:\.\d+)? L -?\d+(?:\.\d+)? -?\d+(?:\.\d+)?$/u.test(path)}
 function inspect(){
  const doc=frame.contentDocument,win=frame.contentWindow;if(!doc||!win)throw new Error('iframe unavailable');
+ frame.style.height=`${Math.max(doc.documentElement.scrollHeight,doc.body.scrollHeight)+1}px`;
  const viewport=doc.documentElement.clientWidth;if(viewport!==requestedWidth)throw new Error(`viewport mismatch:${viewport}/${requestedWidth}`);
  if(doc.documentElement.scrollWidth>viewport||doc.body.scrollWidth>viewport)throw new Error(`horizontal overflow:${viewport}/${doc.documentElement.scrollWidth}/${doc.body.scrollWidth}`);
  const offenders=[...doc.body.querySelectorAll('*')].filter((element)=>{if(element.matches('script,style,[hidden],.ambient-one,.ambient-two'))return false;const style=win.getComputedStyle(element);if(style.display==='none'||style.visibility==='hidden'||style.position==='fixed')return false;const rect=element.getBoundingClientRect();return rect.width>0&&(rect.left<-1||rect.right>viewport+1)});
