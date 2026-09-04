@@ -4,6 +4,7 @@ import { renderProjection } from './modules/browser-renderer.js';
 import { renderThreeWithFallback } from './modules/browser-fallback-orchestrator.js';
 import { createBrowserThreePort } from './modules/browser-three-adapter.js';
 import { createManagedThreeRuntime } from './modules/three-runtime.js';
+import { deriveThreeSelectionStyling, summarizeThreeSelectionStyling } from './modules/three-selection-projection.js';
 import { applyNodeSelectionTransition, bindNodeSelectionSurface, createNodeSelectionController } from './modules/browser-node-selection.js';
 import { deriveDirectRelations } from './modules/direct-relations.js';
 import { project } from './modules/projections.js';
@@ -20,14 +21,17 @@ try {
   const visualTarget = required('#webgl-universe');
   const htmlReceipt = renderProjection(project(scene, 'html'), htmlTarget, { dom });
   let threeRuntime = null;
+  let threeHandle = null;
   const threePort = forceFallback
     ? Object.freeze({ prepareThree() { throw new Error('M3I_FORCED_THREE_PREPARATION_FAILURE'); } })
     : createBrowserThreePort(document, THREE, {
         onRuntimeReady(handle) {
           try {
             threeRuntime = createManagedThreeRuntime(handle, createViewportEnvironment(visualTarget));
+            threeHandle = handle;
           } catch {
             threeRuntime = null;
+            threeHandle = null;
             handle.dispose();
           }
         }
@@ -41,7 +45,7 @@ try {
   visualTarget.dataset.renderRuntime = threeRuntime === null ? 'static' : 'managed';
   if (threeRuntime !== null) {
     threeRuntime.resize();
-    window.addEventListener('pagehide', () => { threeRuntime?.dispose(); threeRuntime = null; }, { once: true });
+    window.addEventListener('pagehide', () => { threeRuntime?.dispose(); threeRuntime = null; threeHandle = null; }, { once: true });
   }
   required('#metric-nodes').textContent = String(artifact.oracle.nodes);
   required('#metric-edges').textContent = String(artifact.oracle.edges);
@@ -63,7 +67,9 @@ try {
   if (visualReceipt.outcome === 'fallback') bindings.push(bindNodeSelectionSurface({ root: visualTarget, projection: 'svg', snapshotId: scene.inputHash, focusOrderNodeIds: visualReceipt.render.focusOrderNodeIds, dispatch: (command) => controller.dispatch(command), initialState: controller.getState() }));
   else if (visualTarget.querySelector('canvas')?.getAttribute('aria-hidden') !== 'true') throw new Error('three canvas accessibility boundary');
 
-  updateInspector = configureExplorer(artifact, controller, scene.inputHash, htmlTarget, visualTarget, visualReceipt.outcome);
+  const paintThreeSelection = createThreeSelectionPainter(artifact.scene, visualTarget, () => threeHandle, () => threeRuntime);
+  const explorerInspector = configureExplorer(artifact, controller, scene.inputHash, htmlTarget, visualTarget, visualReceipt.outcome);
+  updateInspector = (selectedId) => { explorerInspector(selectedId); paintThreeSelection(selectedId); };
   updateInspector(null);
   if (selectionSmoke) {
     runSelectionSmoke(htmlTarget, visualTarget, visualReceipt, controller, scene.inputHash, () => logicalCommits);
@@ -191,6 +197,40 @@ function configureExplorer(artifact, controller, snapshotId, htmlTarget, visualT
     const relationMarkup = renderRelationInspector(relations, nodeById);
     if (!course) { inspector.innerHTML = `<h3>${escapeHtml(node?.label || selectedId)}</h3><p>Bu düğüm müfredat hiyerarşisinin parçasıdır. Ders ayrıntısı mevcut değildir.</p>${relationMarkup}`; return; }
     inspector.innerHTML = `<p class="inspector-kicker">Seçili ders</p><h3>${escapeHtml(course.code)} · ${escapeHtml(course.title)}</h3><dl><div><dt>Yarıyıl</dt><dd>${course.semester}</dd></div><div><dt>Tür</dt><dd>${course.status === 'required' ? 'Zorunlu' : 'Seçmeli'}</dd></div><div><dt>AKTS</dt><dd>${course.ects}</dd></div><div><dt>Seçmeli havuzu</dt><dd>${course.poolId ? escapeHtml(course.poolId) : 'Uygulanamaz'}</dd></div></dl><details><summary>Kaynak ve dönüşüm izi</summary><code>${escapeHtml(course.provenance.sourceId)}</code><code>${escapeHtml(course.provenance.snapshotId)}</code><code>${escapeHtml(course.provenance.locator)}</code><code>${escapeHtml(course.provenance.contentHash)}</code><code>${escapeHtml(course.provenance.transformationVersion || 'Mevcut değil')}</code></details><p class="containment-note">Bu ders, 2025–2026 Ekonometri Müfredatı tarafından içerilir. Önkoşul veya eşkoşul ilişkisi iddia edilmez.</p>${relationMarkup}`;
+  };
+}
+
+function createThreeSelectionPainter(sceneIr, visualTarget, readHandle, readRuntime) {
+  return (selectedId) => {
+    const handle = readHandle();
+    if (handle === null || handle.scene === null || typeof handle.scene !== 'object' || typeof handle.scene.traverse !== 'function') {
+      visualTarget.dataset.threeSelection = 'unavailable';
+      return;
+    }
+    try {
+      const styling = deriveThreeSelectionStyling(sceneIr, selectedId);
+      const nodeStyles = new Map(styling.nodes.map((node) => [node.id, node]));
+      const edgeStyles = new Map(styling.edges.map((value) => [value.id, value]));
+      handle.scene.traverse((object) => {
+        const name = typeof object?.name === 'string' ? object.name : '';
+        if (name === '') return;
+        const style = object.isMesh === true ? nodeStyles.get(name) : object.isLine === true || object.isLineSegments === true ? edgeStyles.get(name) : undefined;
+        if (style === undefined) return;
+        const materials = Array.isArray(object.material) ? object.material : [object.material];
+        for (const material of materials) {
+          if (material === null || typeof material !== 'object') continue;
+          if (material.color && typeof material.color.setHex === 'function') material.color.setHex(style.color);
+          material.transparent = true;
+          material.opacity = style.opacity;
+          material.needsUpdate = true;
+        }
+        if (object.isMesh === true && object.scale && typeof object.scale.setScalar === 'function') object.scale.setScalar(style.scale);
+      });
+      visualTarget.dataset.threeSelection = JSON.stringify(summarizeThreeSelectionStyling(styling));
+      readRuntime()?.invalidate();
+    } catch {
+      visualTarget.dataset.threeSelection = 'unavailable';
+    }
   };
 }
 
