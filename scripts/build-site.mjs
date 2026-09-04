@@ -17,6 +17,7 @@ if (git(['status', '--porcelain', '--untracked-files=no']) !== '') throw new Err
 const copies = new Map([
   ['site/index.html', 'index.html'], ['site/app.js', 'app.js'], ['site/styles.css', 'styles.css'],
   ['dist/src/canonical.js', 'modules/canonical.js'], ['dist/src/projections.js', 'modules/projections.js'],
+  ['dist/src/direct-relations.js', 'modules/direct-relations.js'],
   ['dist/src/browser-renderer.js', 'modules/browser-renderer.js'],
   ['dist/src/browser-fallback-orchestrator.js', 'modules/browser-fallback-orchestrator.js'],
   ['dist/src/browser-dom-adapter.js', 'modules/browser-dom-adapter.js'],
