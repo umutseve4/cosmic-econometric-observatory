@@ -4,6 +4,7 @@ export * from './canonical.js';
 export * from './scene.js';
 export * from './direct-relations.js';
 export * from './frame-scheduler.js';
+export * from './pixel-evidence.js';
 export * from './three-viewport-lifecycle.js';
 export * from './three-runtime.js';
 export * from './three-selection-projection.js';

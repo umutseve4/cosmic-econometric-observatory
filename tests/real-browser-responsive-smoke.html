@@ -122,6 +122,22 @@ function inspect(){
 }
 // A focused camera is only real if the renderer actually produced new frames afterwards.
 // The marker is rewritten on every selection, so re-selecting republishes a live frame count.
+// The frame counter is self-reported by the scheduler, so on its own it proves only that a
+// callback ran. It is therefore corroborated with a GPU pixel readback that the runtime
+// publishes at data-pixel-evidence: a frame captured inside the real render callback must
+// differ from a clear-only baseline and must reproduce under a second render of the same state.
+function pixelEvidenceReport(visual){
+ const raw=visual?.dataset.pixelEvidence;
+ if(raw===undefined)return null;
+ try{return JSON.parse(raw)}catch{throw new Error(`unreadable pixel evidence marker:${raw}`)}
+}
+function assertPixelEvidence(report){
+ if(report===null||typeof report!=='object')throw new Error('pixel evidence marker not an object');
+ if(report.code!=='PIXEL_EVIDENCE_OK'||report.passed!==true)throw new Error(`pixel evidence rejected:${report.code}:changed=${report.changedPixels}/${report.sampledPixels}`);
+ if(!Number.isInteger(report.changedPixels)||report.changedPixels<1)throw new Error(`pixel evidence changed no pixels:${report.changedPixels}`);
+ if(report.deterministic!==true)throw new Error('pixel evidence not reproducible across two renders');
+ if(!Number.isInteger(report.sampledPixels)||report.sampledPixels<1)throw new Error(`pixel evidence sampled nothing:${report.sampledPixels}`);
+}
 function confirmFocusRendering(visual,button,baseline){
  if(mode!=='default'){result.textContent=PASS;return}
  if(!Number.isInteger(baseline)){fail('missing focus frame baseline');return}
@@ -131,7 +147,19 @@ function confirmFocusRendering(visual,button,baseline){
    const after=threeFocusSummary(visual);
    if(after==='unavailable')throw new Error('three focus unavailable at render confirmation');
    if(!(after.renderedFrames>baseline))throw new Error(`three focus produced no new frames:${after.renderedFrames}/${baseline}`);
-   result.textContent=PASS;
+   const deadline=Date.now()+15000;
+   const poll=()=>{
+    try{
+     const report=pixelEvidenceReport(visual);
+     if(report===null){
+      if(Date.now()>=deadline)throw new Error('pixel evidence never published');
+      setTimeout(poll,50);return;
+     }
+     assertPixelEvidence(report);
+     result.textContent=PASS;
+    }catch(error){fail(error instanceof Error?error.message:String(error))}
+   };
+   poll();
   }catch(error){fail(error instanceof Error?error.message:String(error))}
  },250);
 }
