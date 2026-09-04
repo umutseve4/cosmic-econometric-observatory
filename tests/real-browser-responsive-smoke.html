@@ -97,7 +97,7 @@ function visualBox(doc){const visual=doc.querySelector('#webgl-universe');if(!vi
 function syncFrameHeight(doc){const target=Math.max(doc.documentElement.scrollHeight,doc.body.scrollHeight)+1;frame.style.height=`${target}px`;return target}
 function settle(){
  const doc=frame.contentDocument;if(!doc){fail('iframe unavailable');return}
- const finish=()=>{try{inspect()}catch(error){fail(error instanceof Error?error.message:String(error))}};
+ const finish=()=>{try{const win=frame.contentWindow;if(win)win.dispatchEvent(new win.Event('resize'));inspect()}catch(error){fail(error instanceof Error?error.message:String(error))}};
  let previous='',rounds=0;
  const step=()=>{
   try{
