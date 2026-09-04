@@ -104,14 +104,12 @@ function createViewportEnvironment(container) {
     requestFrame(callback) { return window.requestAnimationFrame(callback); },
     cancelFrame(handle) { window.cancelAnimationFrame(handle); },
     observeResize(listener) {
-      if (typeof ResizeObserver !== 'function') {
-        const handler = () => listener();
-        window.addEventListener('resize', handler);
-        return () => window.removeEventListener('resize', handler);
-      }
-      const observer = new ResizeObserver(() => listener());
+      const handler = () => listener();
+      window.addEventListener('resize', handler);
+      if (typeof ResizeObserver !== 'function') return () => window.removeEventListener('resize', handler);
+      const observer = new ResizeObserver(handler);
       observer.observe(container);
-      return () => observer.disconnect();
+      return () => { window.removeEventListener('resize', handler); observer.disconnect(); };
     },
     prefersReducedMotion() { return reducedMotionQuery === null ? true : reducedMotionQuery.matches === true; },
     observeReducedMotion(listener) {
