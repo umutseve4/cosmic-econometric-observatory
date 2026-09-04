@@ -72,7 +72,11 @@
       window.addEventListener('unhandledrejection', (event) => report(event.reason instanceof Error ? event.reason.message : String(event.reason)));
       const phrases = [['Academic knowledge universe','Akademik bilgi evreni'],['Knowledge node details','Bilgi düğümü ayrıntıları'],['Knowledge relations','Bilgi ilişkileri'],['Knowledge nodes','Bilgi düğümleri'],['Relations','İlişkiler'],['institution','kurum'],['curriculum','müfredat'],['course','ders'],['program','lisans programı'],['inspect','incele'],['navigate','gezin'],['CONTAINS','İÇERİR']];
       const attributes = ['aria-label','title','alt','placeholder','value','aria-description'];
-      const translate = (value) => { let output = value; for (const [from,to] of phrases) output = output.split(from).join(to); return output.replace(/(\d+) of (\d+):/g,'$2 öğeden $1.:'); };
+      const translate = (value) => {
+        let output = value;
+        for (const [from, to] of phrases) output = from === 'program' ? output.replace(/(?<!lisans )program/gu, to) : output.split(from).join(to);
+        return output.replace(/(\d+) of (\d+):/g,'$2 öğeden $1.:');
+      };
       const localize = (root) => {
         const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
         let node;
