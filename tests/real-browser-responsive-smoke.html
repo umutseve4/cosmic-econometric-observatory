@@ -14,6 +14,7 @@ function label(element){const name=element.id?`#${element.id}`:element.className
 function edgeIds(root,state){return [...root.querySelectorAll(`[data-edge-id][data-relation-state="${state}"]`)].map((element)=>element.dataset.edgeId).sort()}
 function threeSelectionSummary(visual){const raw=visual?.dataset.threeSelection;if(raw===undefined)throw new Error('missing three selection marker');if(raw==='unavailable')return 'unavailable';try{return JSON.parse(raw)}catch{throw new Error(`unreadable three selection marker:${raw}`)}}
 function counts(selected,incoming,outgoing,incomingOutgoing,unrelated,neutral){return {selected,incoming,outgoing,incomingOutgoing,unrelated,neutral}}
+function threeFocusSummary(visual){const raw=visual?.dataset.threeFocus;if(raw===undefined)throw new Error('missing three focus marker');if(raw==='unavailable')return 'unavailable';try{return JSON.parse(raw)}catch{throw new Error(`unreadable three focus marker:${raw}`)}}
 function inspect(){
  const doc=frame.contentDocument,win=frame.contentWindow;if(!doc||!win)throw new Error('iframe unavailable');
  frame.style.height=`${Math.max(doc.documentElement.scrollHeight,doc.body.scrollHeight)+1}px`;
@@ -73,9 +74,26 @@ function inspect(){
  const courseIncomingId=incomingInspector[0].dataset.edgeId;
  if(JSON.stringify(edgeIds(semantic,'incoming'))!==JSON.stringify([courseIncomingId])||edgeIds(semantic,'outgoing').length!==0||edgeIds(semantic,'unrelated').length!==145)throw new Error('course one-hop edge state');
  const expectThreeSelection=(expected,context)=>{const actual=threeSelectionSummary(visual);if(mode!=='default'){if(actual!=='unavailable')throw new Error(`fallback three selection marker:${context}:${JSON.stringify(actual)}`);return}if(JSON.stringify(actual)!==JSON.stringify(expected))throw new Error(`three selection ${context}:${JSON.stringify(actual)}`)};
+ const focusReadings=[];
+ const expectThreeFocus=(nodeId,neighborCount,context)=>{
+  const actual=threeFocusSummary(visual);
+  if(mode!=='default'){if(actual!=='unavailable')throw new Error(`fallback three focus marker:${context}:${JSON.stringify(actual)}`);return actual}
+  if(actual==='unavailable')throw new Error(`three focus unavailable:${context}`);
+  if(actual.accepted!==true)throw new Error(`three focus rejected:${context}:${JSON.stringify(actual)}`);
+  if(!Number.isInteger(actual.renderedFrames)||actual.renderedFrames<1)throw new Error(`three focus frame counter:${context}:${actual.renderedFrames}`);
+  focusReadings.push(actual.renderedFrames);
+  if(nodeId===null){
+   if(actual.expected.selectedNodeId!==null||actual.expected.center!==null||actual.actual.center!==null||actual.actual.distance!==null)throw new Error(`three focus clear:${context}:${JSON.stringify(actual)}`);
+   return actual;
+  }
+  if(actual.expected.selectedNodeId!==nodeId||actual.expected.neighborCount!==neighborCount||actual.actual.neighborCount!==neighborCount||actual.actual.selectedNodeId!==nodeId)throw new Error(`three focus identity ${context}:${JSON.stringify(actual)}`);
+  if(JSON.stringify(actual.actual.center)!==JSON.stringify(actual.expected.center)||actual.actual.distance!==actual.expected.distance)throw new Error(`three focus camera divergence ${context}:${JSON.stringify(actual)}`);
+  return actual;
+ };
  const selectedSurfaces=[...semantic.querySelectorAll(`[data-node-id="${CSS.escape(selectedId)}"]`)];
  if(selectedSurfaces.length<2||selectedSurfaces.some((element)=>element.dataset.relationState!=='selected')||win.getComputedStyle(selectedSurfaces[0]).outlineStyle==='none')throw new Error('selected non-color cue');
  expectThreeSelection({selectedNodeId:selectedId,nodes:counts(1,1,0,0,145,0),edges:counts(0,1,0,0,145,0)},'course');
+ const courseFocus=expectThreeFocus(selectedId,1,'course');
  if(mode==='fallback'){
   if(JSON.stringify(edgeIds(visual,'incoming'))!==JSON.stringify([courseIncomingId])||edgeIds(visual,'unrelated').length!==145)throw new Error('course HTML SVG parity');
   const incomingPath=visual.querySelector(`[data-edge-id="${CSS.escape(courseIncomingId)}"]`);if(!incomingPath||win.getComputedStyle(incomingPath).strokeDasharray==='none')throw new Error('incoming edge non-color cue');
@@ -88,16 +106,34 @@ function inspect(){
  const hierarchyCounts={inspectorIncoming:hierarchyIncoming.length,inspectorOutgoing:hierarchyOutgoing.length,semanticIncoming:edgeIds(semantic,'incoming').length,semanticOutgoing:edgeIds(semantic,'outgoing').length,semanticUnrelated:edgeIds(semantic,'unrelated').length};
  if(hierarchyCounts.inspectorIncoming!==1||hierarchyCounts.inspectorOutgoing!==144||hierarchyCounts.semanticIncoming!==1||hierarchyCounts.semanticOutgoing!==144||hierarchyCounts.semanticUnrelated!==1)throw new Error(`hierarchy one-hop and two-hop exclusion:${JSON.stringify(hierarchyCounts)}`);
  expectThreeSelection({selectedNodeId:curriculumId,nodes:counts(1,1,144,0,1,0),edges:counts(0,1,144,0,1,0)},'hierarchy');
+ const hierarchyFocus=expectThreeFocus(curriculumId,145,'hierarchy');
+ if(mode==='default'&&!(courseFocus.actual.distance<hierarchyFocus.actual.distance))throw new Error(`focus volume ordering:${courseFocus.actual.distance}/${hierarchyFocus.actual.distance}`);
  if(mode==='fallback'&&(JSON.stringify(edgeIds(semantic,'incoming'))!==JSON.stringify(edgeIds(visual,'incoming'))||JSON.stringify(edgeIds(semantic,'outgoing'))!==JSON.stringify(edgeIds(visual,'outgoing'))||JSON.stringify(edgeIds(semantic,'unrelated'))!==JSON.stringify(edgeIds(visual,'unrelated'))))throw new Error('hierarchy HTML SVG parity');
  first.click();
  const semester=doc.querySelector('#semester-filter');semester.value='8';semester.dispatchEvent(new win.Event('change',{bubbles:true}));
  if(doc.querySelector('#search-results [aria-current="true"]')||!doc.querySelector('#course-inspector .empty-inspector'))throw new Error('filtered selection clear');
  if(semantic.querySelector('[data-relation-state]')||visual?.querySelector('[data-relation-state]'))throw new Error('relation state clear');
  expectThreeSelection({selectedNodeId:null,nodes:counts(0,0,0,0,0,147),edges:counts(0,0,0,0,0,146)},'cleared');
+ expectThreeFocus(null,0,'cleared');
  semester.value='';semester.dispatchEvent(new win.Event('change',{bubbles:true}));
  if(doc.querySelectorAll('#search-results button[data-node-id]').length!==144)throw new Error('filter reset');
  if(doc.querySelector('#result')?.textContent?.trim()!=='M3G_SITE_SMOKE_PASS')throw new Error('runtime marker');
- result.textContent=PASS;
+ confirmFocusRendering(visual,first,focusReadings[0]);
+}
+// A focused camera is only real if the renderer actually produced new frames afterwards.
+// The marker is rewritten on every selection, so re-selecting republishes a live frame count.
+function confirmFocusRendering(visual,button,baseline){
+ if(mode!=='default'){result.textContent=PASS;return}
+ if(!Number.isInteger(baseline)){fail('missing focus frame baseline');return}
+ setTimeout(()=>{
+  try{
+   button.click();
+   const after=threeFocusSummary(visual);
+   if(after==='unavailable')throw new Error('three focus unavailable at render confirmation');
+   if(!(after.renderedFrames>baseline))throw new Error(`three focus produced no new frames:${after.renderedFrames}/${baseline}`);
+   result.textContent=PASS;
+  }catch(error){fail(error instanceof Error?error.message:String(error))}
+ },250);
 }
 function visualBox(doc){const visual=doc.querySelector('#webgl-universe');if(!visual)return '0x0';const box=visual.getBoundingClientRect();return `${Math.floor(box.width)}x${Math.floor(box.height)}`}
 function syncFrameHeight(doc){const target=Math.max(doc.documentElement.scrollHeight,doc.body.scrollHeight)+1;frame.style.height=`${target}px`;return target}
