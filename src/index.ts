@@ -6,6 +6,7 @@ export * from './direct-relations.js';
 export * from './three-viewport-lifecycle.js';
 export * from './three-runtime.js';
 export * from './three-selection-projection.js';
+export * from './three-focus-target.js';
 export * from './projections.js';
 export * from './browser-renderer.js';
 export * from './browser-fallback-orchestrator.js';
