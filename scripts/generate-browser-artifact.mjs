@@ -9,6 +9,18 @@ const EXPECTED = Object.freeze({
   duplicate_stable_ids: 0, dangling_edges: 0, missing_required_provenance: 0,
   schema_validation_errors: 0, silent_fallbacks: 0
 });
+// The anomalies the importer records about the curriculum source itself, kept
+// deliberately separate from the timetable reconciliation anomalies, whose ids
+// are prefixed `offering-`. The identifier prefix is the partition: this count
+// covers six duplicate official course codes (EKO2004, EKO4305 and IKT3306 —
+// one anomaly per row, so the two rows sharing a code stay independently
+// addressable), three source misspellings preserved verbatim, and the single
+// 240-versus-241 ECTS conflict in the published programme metadata. It is an
+// independent pin rather than a derived length, so a source edit that silently
+// adds or resolves a conflict fails the build instead of quietly changing the
+// published artefact. Deliberately not folded into `EXPECTED`: that object is
+// compared key-for-key against the browser and the live verifier.
+const EXPECTED_CURRICULUM_ANOMALIES = 10;
 
 export function buildBrowserArtifact(repositoryRoot) {
   const root = resolve(repositoryRoot);
@@ -63,6 +75,20 @@ export function buildBrowserArtifact(repositoryRoot) {
     };
   }).sort((left, right) => compareCodePoints(`${left.code}:${left.id}`, `${right.code}:${right.id}`));
 
+  // Sorted by identifier because the importer emits them in source-row order,
+  // and the artefact must be byte-identical across builds. Identifiers are
+  // unique by construction (`validateBuuSnapshotReferences` rejects duplicates),
+  // so this is a total order.
+  const anomalies = snapshot.anomalies
+    .filter(({ id }) => id.startsWith('anomaly-'))
+    .map(({ id, code, severity, message, entityRefs, evidence }) => ({
+      id, code, severity, message,
+      entityRefs: [...entityRefs],
+      evidence: [...evidence]
+    }))
+    .sort((left, right) => compareCodePoints(left.id, right.id));
+  if (anomalies.length !== EXPECTED_CURRICULUM_ANOMALIES) throw new Error(`BROWSER_ARTIFACT_ANOMALY_DRIFT:${anomalies.length}:${EXPECTED_CURRICULUM_ANOMALIES}`);
+
   return {
     schemaVersion: '1.0.0',
     curriculumId: CURRICULUM_ID,
@@ -70,7 +96,8 @@ export function buildBrowserArtifact(repositoryRoot) {
     graphHash: compilation.anchorManifest.graphHash,
     oracle,
     scene: compileScene(graph, 'buu-econometrics-2025-2026', 'radial-v1'),
-    courses
+    courses,
+    anomalies
   };
 }
 
