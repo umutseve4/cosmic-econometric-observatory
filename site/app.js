@@ -76,6 +76,7 @@ try {
   const explorerInspector = configureExplorer(artifact, controller, scene.inputHash, htmlTarget, visualTarget, visualReceipt.outcome);
   updateInspector = (selectedId) => { explorerInspector(selectedId); paintThreeSelection(selectedId); focusThreeCamera(selectedId); };
   updateInspector(null);
+  renderAnomalies(artifact, controller, scene.inputHash);
   if (selectionSmoke) {
     runSelectionSmoke(htmlTarget, visualTarget, visualReceipt, controller, scene.inputHash, () => logicalCommits);
     result.textContent = 'M3I_SITE_SMOKE_PASS';
@@ -101,6 +102,11 @@ async function loadArtifact() {
   if (new Set(ids).size !== ids.length || new Set(nodeIds).size !== nodeIds.length || new Set(edgeIds).size !== edgeIds.length) throw new Error('artifact duplicate identity');
   if (value.scene.edges.some(({ source, target }) => !nodeRegistry.has(source) || !nodeRegistry.has(target)) || ids.some((id) => !nodeRegistry.has(id))) throw new Error('artifact referential integrity');
   if (value.courses.some((course) => !course.code || !course.title || !Number.isInteger(course.semester) || course.semester < 1 || course.semester > 8 || !['required', 'elective'].includes(course.status) || !Number.isFinite(course.ects) || course.ects < 0 || !course.relationId || !course.provenance?.sourceId || !course.provenance?.snapshotId || !course.provenance?.locator || !course.provenance?.observedAt || !/^sha256:[0-9a-f]{64}$/u.test(course.provenance?.contentHash || ''))) throw new Error('artifact courses');
+  // The published contradictions are load-bearing, not decoration: the build refuses to
+  // emit a drifting count, so the browser refuses to render a drifting one. Ten is the
+  // compiler's own census of the 2025-2026 Bilgi Paketi, proven by `anomaly-census.mjs`
+  // and re-proven on every build by BROWSER_ARTIFACT_ANOMALY_DRIFT.
+  if (!Array.isArray(value.anomalies) || value.anomalies.length !== 10 || value.anomalies.some((anomaly) => !anomaly?.id || !anomaly.code || !anomaly.severity || !anomaly.message || !Array.isArray(anomaly.entityRefs))) throw new Error('artifact anomalies');
   return value;
 }
 
@@ -518,6 +524,70 @@ function runSelectionSmoke(htmlRoot, visualRoot, visualReceipt, controller, snap
     if (canvas?.getAttribute('aria-hidden') !== 'true' || canvas.hasAttribute('aria-current') || canvas.hasAttribute('data-selected')) throw new Error('Three selection isolation');
   }
 }
+/**
+ * Publishes the compiler's own anomaly census as a readable section instead of leaving it
+ * buried in the artifact. Three rules govern this surface:
+ *
+ * 1. The engine's `message` is printed verbatim inside `<code>`. It is evidence, and
+ *    paraphrasing evidence would make the page a nicer-looking but weaker claim.
+ * 2. Turkish framing text is written here, not translated at runtime: the inline
+ *    localizer in `index.html` only walks `#html-universe` and `#webgl-universe`.
+ * 3. `entityRefs` are treated as untrusted for navigation. Only refs that actually
+ *    resolve to a node in this scene become buttons, so a future ref pointing at
+ *    something unrenderable degrades to plain text instead of a dead control.
+ *
+ * Buttons carry `data-anomaly-node-id`, never `data-node-id` or `data-edge-id`: the
+ * responsive smoke pins those two counts exactly (>=147 and ===146) and pins
+ * `#search-results button[data-node-id]` at 144. A new identity attribute keeps this
+ * section entirely outside those oracles.
+ */
+function renderAnomalies(artifact, controller, snapshotId) {
+  const list = required('#anomaly-list');
+  const nodeById = new Map(artifact.scene.nodes.map((node) => [node.id, node]));
+  const search = document.querySelector('#course-search');
+  const semester = document.querySelector('#semester-filter');
+  const status = document.querySelector('#status-filter');
+  const kinds = [
+    ['anomaly-duplicate-', 'duplicate', 'Yinelenen ders kodu', 'Aynı ders kodu bu müfredatta birden fazla kez basılmış. Kayıtlar birleştirilmez; her basım kendi kaynak iziyle ayrı ayrı korunur.'],
+    ['anomaly-typo-', 'typo', 'Kaynaktaki yazım hatası', 'Resmî ders adı hatalı yazılmış. Ad kaynaktaki haliyle yayımlanır; sessizce düzeltmek kaynağı temsil etmemek olurdu.'],
+    ['', 'ects', 'AKTS toplamı çelişkisi', 'İlan edilen yarıyıl AKTS toplamı, o yarıyılın ders kayıtlarından hesaplanan toplamla uyuşmuyor.']
+  ];
+  list.dataset.anomalyCount = String(artifact.anomalies.length);
+  list.replaceChildren(...artifact.anomalies.map((anomaly) => {
+    const [, kind, heading, explanation] = kinds.find(([prefix]) => anomaly.id.startsWith(prefix));
+    const item = document.createElement('li');
+    item.dataset.anomalyKind = kind;
+    // The subject is derived from the id rather than parsed out of the message, because
+    // the message is evidence and must stay untouched. Ids that carry no course code
+    // (the ECTS total) fall back to naming the curriculum itself.
+    // Deliberately `toUpperCase`, never `toLocaleUpperCase('tr-TR')`: the Turkish locale
+    // maps `i` to `İ`, which would print IKT3306 as İKT3306 and misquote the very source
+    // code this section exists to reproduce faithfully. Course codes are ASCII identifiers.
+    const subject = (anomaly.id.match(/[a-z]{3}\d{4}/u)?.[0] ?? '').toUpperCase() || 'Müfredat toplamı';
+    item.innerHTML = `<p class="anomaly-kind">${escapeHtml(heading)}</p><h3>${escapeHtml(subject)}</h3><p>${escapeHtml(explanation)}</p><dl class="anomaly-record"><dt>Derleyici kaydı</dt><dd><code>${escapeHtml(anomaly.message)}</code><code>${escapeHtml(anomaly.code)} · ${escapeHtml(anomaly.severity)} · ${escapeHtml(anomaly.id)}</code></dd></dl>`;
+    for (const ref of anomaly.entityRefs) {
+      const node = nodeById.get(ref);
+      if (node === undefined) continue;
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.anomalyNodeId = ref;
+      button.textContent = `Gezginde göster: ${node.label || ref}`;
+      button.addEventListener('click', () => {
+        // Clearing the filters first guarantees the target is present in the result
+        // list before it is selected, so `renderResults` cannot immediately clear the
+        // very selection this button just made.
+        if (search) { search.value = ''; search.dispatchEvent(new Event('input', { bubbles: true })); }
+        if (semester) { semester.value = ''; semester.dispatchEvent(new Event('change', { bubbles: true })); }
+        if (status) { status.value = ''; status.dispatchEvent(new Event('change', { bubbles: true })); }
+        controller.dispatch({ type: 'select', nodeId: ref, expectedSnapshotId: snapshotId });
+        document.querySelector('#explorer')?.scrollIntoView({ block: 'start' });
+      });
+      item.append(button);
+    }
+    return item;
+  }));
+}
+
 function normalizeSearch(value) { return value.normalize('NFC').toLocaleUpperCase('tr-TR').replace(/[’']/gu, "'").replace(/[^0-9A-ZÇĞİÖŞÜ']/gu, ' ').replace(/\s+/gu, ' ').trim(); }
 function sameSet(left, right) { const values = new Set(right); return left.length === right.length && values.size === right.length && left.every((value) => values.has(value)); }
 function required(selector) { const element = document.querySelector(selector); if (!element) throw new Error(`missing element:${selector}`); return element; }
