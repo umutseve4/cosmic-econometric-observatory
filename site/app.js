@@ -490,7 +490,7 @@ function renderRelationList(relations, nodeById, emptyText) {
   if (relations.length === 0) return `<p class="empty-relations">${emptyText}</p>`;
   return `<ul>${relations.map((relation) => {
     const counterpart = nodeById.get(relation.relatedNodeId);
-    return `<li data-edge-id="${escapeHtml(relation.edgeId)}" data-direction="${relation.direction}"><strong>${escapeHtml(relation.semanticKind)}</strong><span>${escapeHtml(counterpart?.label || relation.relatedNodeId)}</span><code>${escapeHtml(relation.edgeId)}</code></li>`;
+    return `<li data-edge-id="${escapeHtml(relation.edgeId)}" data-direction="${escapeHtml(relation.direction)}"><strong>${escapeHtml(relation.semanticKind)}</strong><span>${escapeHtml(counterpart?.label || relation.relatedNodeId)}</span><code>${escapeHtml(relation.edgeId)}</code></li>`;
   }).join('')}</ul>`;
 }
 
