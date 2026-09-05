@@ -22,6 +22,24 @@ const EXPECTED_PAYLOAD = Object.freeze([
   'modules/three-selection-projection.js', 'modules/three-viewport-lifecycle.js',
   'styles.css', 'vendor/three.core.js', 'vendor/three.module.js'
 ]);
+// Canonical graph size, pinned independently of the deployed artefact. The
+// oracle is `EXPECTED` in scripts/generate-browser-artifact.mjs (147 nodes /
+// 146 edges = 1 institution + 1 program + 1 curriculum + 144 courses, and
+// 2 hierarchy edges + 144 course edges). tests/real-browser-responsive-smoke.html
+// asserts the same totals against the built site, so both surfaces must agree.
+const EXPECTED_NODES = 147;
+const EXPECTED_EDGES = 146;
+
+// Phrases that must be present in the live rendered page. `lisans programı` is
+// load-bearing: it exists in no static markup and can only be produced by the
+// in-page localisation pass rewriting the projected `program` semantic kind, so
+// it proves the semantic universe actually rendered and was localised in
+// production. The others are static Turkish chrome that stays visible at every
+// tested viewport (styles.css only hides .brand-copy small, .status span and
+// .interaction-hint below 600px, so none of those may be pinned here).
+const TURKISH_SURFACE_PINS = Object.freeze([
+  'Müfredatta ara', 'Tam semantik müfredat haritası', 'lisans programı'
+]);
 const SHA256 = /^[0-9a-f]{64}$/u;
 const GIT_SHA = /^[0-9a-f]{40}$/u;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -224,13 +242,14 @@ async function runBrowserCase(siteUrl, testCase, port) {
     const value = evaluated.result.value;
     const unique = (items) => new Set(items).size;
     assert(value.result === 'M3G_SITE_SMOKE_PASS', `BROWSER_MARKER:${testCase.name}`);
-    assert(value.lang === 'tr' && value.title === 'Kozmik Ekonometri Rasathanesi' && value.bodyText.includes('Bilgi düğümleri ve ilişkiler'), `BROWSER_TURKISH_SURFACE:${testCase.name}`);
+    const missingPins = TURKISH_SURFACE_PINS.filter((phrase) => !value.bodyText.includes(phrase));
+    assert(value.lang === 'tr' && value.title === 'Kozmik Ekonometri Rasathanesi' && missingPins.length === 0, `BROWSER_TURKISH_SURFACE:${testCase.name}:lang=${value.lang}:title=${value.title}:missing=${missingPins.join('|') || 'none'}`);
     assert(value.renderMode === testCase.expectedMode, `BROWSER_MODE:${testCase.name}:${value.renderMode}`);
     assert(value.overflow <= 0, `BROWSER_OVERFLOW:${testCase.name}:${value.overflow}`);
-    assert(unique(value.htmlNodeIds) === 5 && unique(value.htmlEdgeIds) === 4, `BROWSER_HTML_PARITY:${testCase.name}`);
-    if (testCase.expectedMode === 'fallback') assert(unique(value.visualNodeIds) === 5 && unique(value.visualEdgeIds) === 4 && value.svgCount === 1, `BROWSER_FALLBACK_PARITY:${testCase.name}`);
+    assert(unique(value.htmlNodeIds) === EXPECTED_NODES && unique(value.htmlEdgeIds) === EXPECTED_EDGES, `BROWSER_HTML_PARITY:${testCase.name}:nodes=${unique(value.htmlNodeIds)}/${EXPECTED_NODES}:edges=${unique(value.htmlEdgeIds)}/${EXPECTED_EDGES}`);
+    if (testCase.expectedMode === 'fallback') assert(unique(value.visualNodeIds) === EXPECTED_NODES && unique(value.visualEdgeIds) === EXPECTED_EDGES && value.svgCount === 1, `BROWSER_FALLBACK_PARITY:${testCase.name}:nodes=${unique(value.visualNodeIds)}/${EXPECTED_NODES}:edges=${unique(value.visualEdgeIds)}/${EXPECTED_EDGES}:svg=${value.svgCount}`);
     else assert(value.canvasCount === 1, `BROWSER_THREE_ACCESSIBILITY:${testCase.name}`);
-    console.log(`Browser PASS: ${testCase.name}; ${testCase.width}x${testCase.height}; mode=${value.renderMode}; nodes=5; edges=4`);
+    console.log(`Browser PASS: ${testCase.name}; ${testCase.width}x${testCase.height}; mode=${value.renderMode}; nodes=${unique(value.htmlNodeIds)}/${EXPECTED_NODES}; edges=${unique(value.htmlEdgeIds)}/${EXPECTED_EDGES}`);
   } finally {
     try { if (browser && targetId) await browser.call('Target.closeTarget', { targetId }); } catch { /* bounded browser shutdown follows */ }
     page?.close(); browser?.close(); await stopChrome(chrome);
