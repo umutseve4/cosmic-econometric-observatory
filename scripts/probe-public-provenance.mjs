@@ -2,18 +2,34 @@
 import { randomUUID } from 'node:crypto';
 import process from 'node:process';
 
+// The exact set of payload files production must serve, in the code-point order
+// scripts/build-site.mjs writes them. This is deliberately an independent pin
+// rather than something read back from the live manifest: the manifest is the
+// artefact under test, so it cannot also be the definition of what is correct.
+// Keep this list in step with the `copies` map in scripts/build-site.mjs and
+// with EXPECTED_PAYLOAD in scripts/verify-live-site.mjs; the reported total
+// below is derived from it, so adding an entry here is the only edit a new
+// payload file needs.
 const EXPECTED_PAYLOAD = Object.freeze([
-  'app.js', 'index.html', 'modules/browser-dom-adapter.js',
-  'modules/browser-fallback-orchestrator.js', 'modules/browser-node-selection.js',
-  'modules/browser-renderer.js', 'modules/browser-three-adapter.js',
-  'modules/canonical.js', 'modules/projections.js', 'styles.css',
-  'vendor/three.core.js', 'vendor/three.module.js'
+  'app.js', 'data/curriculum-observatory.json', 'index.html',
+  'modules/browser-dom-adapter.js', 'modules/browser-fallback-orchestrator.js',
+  'modules/browser-node-selection.js', 'modules/browser-renderer.js',
+  'modules/browser-three-adapter.js', 'modules/canonical.js',
+  'modules/direct-relations.js', 'modules/frame-scheduler.js',
+  'modules/pixel-evidence.js', 'modules/projections.js',
+  'modules/three-focus-target.js', 'modules/three-runtime.js',
+  'modules/three-selection-projection.js', 'modules/three-viewport-lifecycle.js',
+  'styles.css', 'vendor/three.core.js', 'vendor/three.module.js'
 ]);
 const GIT_SHA = /^[0-9a-f]{40}$/u;
 const SHA256 = /^[0-9a-f]{64}$/u;
 const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 const fail = (message) => { throw new Error(message); };
 const assert = (condition, message) => { if (!condition) fail(message); };
+
+// A misordered pin would surface as a confusing fileset mismatch against a
+// perfectly good deployment, so fail on the pin itself before probing the site.
+assert(EXPECTED_PAYLOAD.every((path, index) => index === 0 || EXPECTED_PAYLOAD[index - 1] < path), 'PROVENANCE_CONTINUITY_EXPECTED_PAYLOAD_ORDER');
 
 function settings() {
   const rawUrl = process.env.SITE_URL;
@@ -57,7 +73,7 @@ function validateManifest(manifest, expectedSourceSha) {
   assert(manifest.schemaVersion === '1.0.0', 'PROVENANCE_CONTINUITY_SCHEMA');
   assert(manifest.sourceSha === expectedSourceSha, `PROVENANCE_CONTINUITY_SOURCE_SHA:${manifest.sourceSha}`);
   assert(typeof manifest.lockfileSha256 === 'string' && SHA256.test(manifest.lockfileSha256), 'PROVENANCE_CONTINUITY_LOCKFILE_SHA');
-  assert(Array.isArray(manifest.files) && manifest.files.length === EXPECTED_PAYLOAD.length, 'PROVENANCE_CONTINUITY_FILE_COUNT');
+  assert(Array.isArray(manifest.files) && manifest.files.length === EXPECTED_PAYLOAD.length, `PROVENANCE_CONTINUITY_FILE_COUNT:${Array.isArray(manifest.files) ? manifest.files.length : 'not-an-array'}/${EXPECTED_PAYLOAD.length}`);
   const paths = manifest.files.map((entry) => entry?.path);
   assert(paths.every((path, index) => path === EXPECTED_PAYLOAD[index]), `PROVENANCE_CONTINUITY_FILESET:${paths.join(',')}`);
   for (const entry of manifest.files) {
@@ -73,7 +89,7 @@ async function probe(siteUrl, expectedSourceSha) {
     try {
       const manifest = await fetchManifest(provenanceUrl(siteUrl));
       validateManifest(manifest, expectedSourceSha);
-      console.log(`PUBLIC_PROVENANCE_CONTINUITY_PASS:${expectedSourceSha}:attempt=${attempt}:files=12`);
+      console.log(`PUBLIC_PROVENANCE_CONTINUITY_PASS:${expectedSourceSha}:attempt=${attempt}:files=${EXPECTED_PAYLOAD.length}`);
       return;
     } catch (error) {
       lastError = error;
