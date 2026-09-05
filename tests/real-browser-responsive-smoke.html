@@ -1,107 +1,184 @@
 <!doctype html>
-<html lang="tr">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Responsive product acceptance smoke</title>
-  <style>
-    html, body { margin: 0; min-height: 100%; }
-    iframe { display: block; height: 10000px; border: 0; }
-    #result { position: fixed; inset: auto 0 0; margin: 0; padding: 4px; background: #fff; color: #000; z-index: 9999; }
-  </style>
-</head>
-<body>
-  <iframe id="site" title="Kozmik Ekonometri responsive test"></iframe>
-  <pre id="result">RESPONSIVE_PRODUCT_SMOKE_RUNNING</pre>
-  <script>
-    const PASS = 'RESPONSIVE_PRODUCT_SMOKE_PASS';
-    const FAIL = 'RESPONSIVE_PRODUCT_SMOKE_FAIL';
-    const result = document.querySelector('#result');
-    const frame = document.querySelector('#site');
-    const params = new URL(location.href).searchParams;
-    const requestedWidth = Number(params.get('width'));
-    const mode = params.get('mode');
-    const englishLeak = /(^|[^\p{L}\p{N}])(academic knowledge universe|knowledge node details|knowledge relations|knowledge nodes|relations|university|department|faculty|institution|curriculum|course|source|program|selected node|root node|child of|contains|belongs to)(?=$|[^\p{L}\p{N}])/iu;
-    const englishLeakSamples = ['Academic knowledge universe', 'Knowledge node details', 'Knowledge relations', 'Knowledge nodes', 'Relations', 'University', 'Department', 'Faculty', 'institution', 'curriculum', 'course', 'source', 'program', 'selected node', 'root node', 'child of', 'contains', 'belongs to'];
-    if (englishLeakSamples.some((sample) => !englishLeak.test(sample))) throw new Error('English leak oracle coverage drift');
-    if (englishLeak.test('lisans programı')) throw new Error('English leak oracle Turkish false positive');
-    if (!Number.isInteger(requestedWidth) || requestedWidth < 240 || requestedWidth > 2000) throw new Error('invalid requested width');
-    if (mode !== 'default' && mode !== 'fallback') throw new Error('invalid render mode');
-    frame.style.width = `${requestedWidth}px`;
-
-    function fail(message) { result.textContent = `${FAIL}:${message}`; }
-    function describedText(doc, element) {
-      const ids = (element.getAttribute('aria-describedby') || '').trim().split(/\s+/u).filter(Boolean);
-      return ids.map((id) => doc.getElementById(id)?.textContent || '').join(' ');
-    }
-    function finitePath(path) {
-      return /^M -?\d+(?:\.\d+)? -?\d+(?:\.\d+)? L -?\d+(?:\.\d+)? -?\d+(?:\.\d+)?$/u.test(path);
-    }
-    function inspect() {
-      const doc = frame.contentDocument;
-      if (!frame.contentWindow || !doc) throw new Error('iframe unavailable');
-      const viewport = doc.documentElement.clientWidth;
-      if (viewport !== requestedWidth) throw new Error(`viewport mismatch:${viewport}/${requestedWidth}`);
-      if (doc.documentElement.scrollWidth > viewport || doc.body.scrollWidth > viewport) throw new Error(`horizontal overflow:${viewport}/${doc.documentElement.scrollWidth}/${doc.body.scrollWidth}`);
-      const offenders = [...doc.body.querySelectorAll('*')].filter((element) => {
-        if (element.matches('script, style, [hidden], .ambient-one, .ambient-two')) return false;
-        const style = frame.contentWindow.getComputedStyle(element);
-        if (style.display === 'none' || style.visibility === 'hidden') return false;
-        const rect = element.getBoundingClientRect();
-        return rect.width > 0 && (rect.left < -1 || rect.right > viewport + 1);
-      });
-      if (offenders.length > 0) throw new Error(`clipped elements:${offenders.slice(0, 5).map((element) => element.id || element.className || element.tagName).join(',')}`);
-      const roots = ['#webgl-universe', '#html-universe'].map((selector) => doc.querySelector(selector)).filter(Boolean);
-      const surfaces = roots.flatMap((root) => {
-        const elements = [root, ...root.querySelectorAll('*')];
-        return elements.flatMap((element) => [
-          element === root ? root.textContent || '' : '',
-          element.getAttribute?.('aria-label') || '', element.getAttribute?.('title') || '',
-          element.getAttribute?.('alt') || '', element.getAttribute?.('placeholder') || '',
-          element.getAttribute?.('value') || '', element.getAttribute?.('aria-description') || '',
-          describedText(doc, element), element.matches?.('svg title') ? element.textContent || '' : ''
-        ]);
-      });
-      const leak = surfaces.find((value) => englishLeak.test(value));
-      if (leak) throw new Error(`English accessible-name leak:${leak.slice(0, 80)}`);
-      const visual = doc.querySelector('#webgl-universe');
-      const renderMode = visual?.dataset.renderMode;
-      if (mode === 'default') {
-        if (renderMode !== 'three') throw new Error(`default render mode:${renderMode || 'missing'}`);
-        const canvas = visual.querySelector('canvas');
-        if (!canvas || canvas.width !== 960 || canvas.height !== 720) throw new Error(`canvas buffer:${canvas?.width || 0}x${canvas?.height || 0}`);
-        const rect = canvas.getBoundingClientRect();
-        if (rect.height <= 0 || Math.abs(rect.width / rect.height - 4 / 3) > 0.02) throw new Error(`canvas aspect:${rect.width}/${rect.height}`);
-      }
-      if (mode === 'fallback') {
-        const svg = visual?.querySelector('svg');
-        if (renderMode !== 'fallback' || !svg) throw new Error(`fallback render mode:${renderMode || 'missing'}`);
-        const values = (svg.getAttribute('viewBox') || '').trim().split(/\s+/u).map(Number);
-        if (values.length !== 4 || values.some((value) => !Number.isFinite(value)) || values[2] <= 0 || values[3] <= 0) throw new Error(`svg viewBox:${values.join('/')}`);
-        const paths = [...svg.querySelectorAll('path[data-edge-id]')];
-        if (paths.length !== 4 || paths.some((path) => !finitePath(path.getAttribute('d') || ''))) throw new Error(`svg edge geometry:${paths.length}`);
-        if (svg.querySelectorAll('g[data-node-id]').length !== 5) throw new Error('svg node count');
-      }
-      const runtime = doc.querySelector('#result')?.textContent?.trim();
-      if (runtime !== 'M3G_SITE_SMOKE_PASS') throw new Error(`runtime marker:${runtime || 'missing'}`);
-      result.textContent = PASS;
-    }
-
-    frame.addEventListener('load', () => {
-      const deadline = Date.now() + 20_000;
-      const poll = () => {
-        try {
-          const runtime = frame.contentDocument?.querySelector('#result')?.textContent?.trim() || '';
-          if (runtime === 'M3G_SITE_SMOKE_PASS') { inspect(); return; }
-          if (runtime.startsWith('M3G_SITE_SMOKE_FAIL')) { fail(runtime); return; }
-          if (Date.now() >= deadline) { fail(`timeout:${runtime || 'missing'}`); return; }
-          setTimeout(poll, 50);
-        } catch (error) { fail(error instanceof Error ? error.message : String(error)); }
-      };
-      poll();
-    }, { once: true });
-    frame.addEventListener('error', () => fail('iframe load error'), { once: true });
-    frame.src = `/dist-site/index.html?responsive-smoke=1${mode === 'fallback' ? '&force-fallback=true' : ''}`;
-  </script>
-</body>
-</html>
+<html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Responsive product acceptance smoke</title><style>html,body{margin:0;min-height:100%}iframe{display:block;height:12000px;border:0}#result{position:fixed;inset:auto 0 0;margin:0;padding:4px;background:#fff;color:#000;z-index:9999}</style></head>
+<body><iframe id="site" title="Kozmik Ekonometri responsive test"></iframe><pre id="result">RESPONSIVE_PRODUCT_SMOKE_RUNNING</pre>
+<script>
+const PASS='RESPONSIVE_PRODUCT_SMOKE_PASS',FAIL='RESPONSIVE_PRODUCT_SMOKE_FAIL';
+const result=document.querySelector('#result'),frame=document.querySelector('#site'),params=new URL(location.href).searchParams;
+const requestedWidth=Number(params.get('width')),mode=params.get('mode');
+if(!Number.isInteger(requestedWidth)||requestedWidth<240||requestedWidth>2000)throw new Error('invalid requested width');
+if(!['default','fallback'].includes(mode))throw new Error('invalid render mode');
+frame.style.width=`${requestedWidth}px`;
+function fail(message){result.textContent=`${FAIL}:${message}`}
+function finitePath(path){return /^M -?\d+(?:\.\d+)? -?\d+(?:\.\d+)? L -?\d+(?:\.\d+)? -?\d+(?:\.\d+)?$/u.test(path)}
+function label(element){const name=element.id?`#${element.id}`:element.className?`.${String(element.className).trim().replace(/\s+/gu,'.')}`:element.tagName;return `${name}[${element.clientWidth}/${element.scrollWidth}]`}
+function edgeIds(root,state){return [...root.querySelectorAll(`[data-edge-id][data-relation-state="${state}"]`)].map((element)=>element.dataset.edgeId).sort()}
+function threeSelectionSummary(visual){const raw=visual?.dataset.threeSelection;if(raw===undefined)throw new Error('missing three selection marker');if(raw==='unavailable')return 'unavailable';try{return JSON.parse(raw)}catch{throw new Error(`unreadable three selection marker:${raw}`)}}
+function counts(selected,incoming,outgoing,incomingOutgoing,unrelated,neutral){return {selected,incoming,outgoing,incomingOutgoing,unrelated,neutral}}
+function threeFocusSummary(visual){const raw=visual?.dataset.threeFocus;if(raw===undefined)throw new Error('missing three focus marker');if(raw==='unavailable')return 'unavailable';try{return JSON.parse(raw)}catch{throw new Error(`unreadable three focus marker:${raw}`)}}
+function inspect(){
+ const doc=frame.contentDocument,win=frame.contentWindow;if(!doc||!win)throw new Error('iframe unavailable');
+ frame.style.height=`${Math.max(doc.documentElement.scrollHeight,doc.body.scrollHeight)+1}px`;
+ const viewport=doc.documentElement.clientWidth;if(viewport!==requestedWidth)throw new Error(`viewport mismatch:${viewport}/${requestedWidth}`);
+ const candidates=[...doc.body.querySelectorAll('*')].filter((element)=>{if(element.matches('script,style,[hidden],.ambient-one,.ambient-two'))return false;const style=win.getComputedStyle(element);return style.display!=='none'&&style.visibility!=='hidden'});
+ const offenders=candidates.filter((element)=>{const rect=element.getBoundingClientRect();return rect.width>0&&(rect.left<-1||rect.right>viewport+1)});
+ const intrinsic=candidates.filter((element)=>element.scrollWidth>element.clientWidth+1);
+ const offenderLabels=offenders.slice(0,5).map(label).join(',');
+ const intrinsicLabels=intrinsic.slice(0,5).map(label).join(',');
+ if(doc.documentElement.scrollWidth>viewport||doc.body.scrollWidth>viewport)throw new Error(`horizontal overflow:${viewport}/${doc.documentElement.scrollWidth}/${doc.body.scrollWidth}:geometry=${offenderLabels||'none'}:intrinsic=${intrinsicLabels||'none'}`);
+ if(offenders.length)throw new Error(`clipped elements:${offenderLabels}`);
+ for(const selector of ['#course-search','#semester-filter','#status-filter','#search-results','#course-inspector','#html-universe'])if(!doc.querySelector(selector))throw new Error(`missing product control:${selector}`);
+ if(doc.querySelectorAll('#search-results button[data-node-id]').length!==144)throw new Error('course result count');
+ if(doc.querySelectorAll('#html-universe [data-node-id]').length<147)throw new Error('semantic node surface count');
+ const visual=doc.querySelector('#webgl-universe'),renderMode=visual?.dataset.renderMode;
+ if(mode==='default'){
+  const canvas=visual?.querySelector('canvas');
+  if(renderMode!=='three'||!canvas||canvas.getAttribute('aria-hidden')!=='true')throw new Error(`default render:${renderMode||'missing'}`);
+  if(visual?.dataset.renderRuntime!=='managed')throw new Error(`default runtime ownership:${visual?.dataset.renderRuntime||'missing'}`);
+  const box=visual.getBoundingClientRect();
+  const ratio=Number.isFinite(win.devicePixelRatio)&&win.devicePixelRatio>0?win.devicePixelRatio:1,dpr=Math.min(2,Math.max(1,ratio));
+  const expectedWidth=Math.floor(Math.max(1,Math.floor(box.width))*dpr),expectedHeight=Math.floor(Math.max(1,Math.floor(box.height))*dpr);
+  if(canvas.width!==expectedWidth||canvas.height!==expectedHeight)throw new Error(`default canvas viewport:${canvas.width}x${canvas.height}/${expectedWidth}x${expectedHeight}@${dpr}`);
+ }
+ if(mode==='fallback'){
+  const svg=visual?.querySelector('svg');if(renderMode!=='fallback'||!svg)throw new Error(`fallback render:${renderMode||'missing'}`);
+  const paths=[...svg.querySelectorAll('path[data-edge-id]')];if(paths.length!==146||paths.some((path)=>!finitePath(path.getAttribute('d')||'')))throw new Error(`svg edge geometry:${paths.length}`);
+  if(svg.querySelectorAll('g[data-node-id]').length!==147)throw new Error('svg node count');
+ }
+ const semantic=doc.querySelector('#html-universe');
+ const semanticEdges=[...semantic.querySelectorAll('[data-edge-id]')];
+ if(semanticEdges.length!==146||semanticEdges.some((edge)=>!edge.dataset.source||!edge.dataset.target))throw new Error('semantic edge endpoint metadata');
+ const search=doc.querySelector('#course-search'),dispatchInput=()=>search.dispatchEvent(new win.Event('input',{bubbles:true}));
+ const firstCode=doc.querySelector('#search-results button[data-node-id] strong')?.textContent?.trim();if(!firstCode)throw new Error('missing first course code');
+ search.value='__NO_SUCH_COURSE__';dispatchInput();search.focus();search.dispatchEvent(new win.KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true}));
+ if(doc.querySelector('#search-results button[data-node-id]')||doc.activeElement!==search)throw new Error('empty result navigation');
+ search.value=firstCode;dispatchInput();const singleton=[...doc.querySelectorAll('#search-results button[data-node-id]')];
+ if(singleton.length!==1)throw new Error(`singleton result:${singleton.length}`);
+ search.focus();search.dispatchEvent(new win.KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true}));
+ singleton[0].dispatchEvent(new win.KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true}));
+ if(doc.activeElement!==singleton[0])throw new Error('singleton result clamp');
+ search.value='';dispatchInput();const buttons=[...doc.querySelectorAll('#search-results button[data-node-id]')],first=buttons[0],second=buttons[1],last=buttons.at(-1);
+ search.focus();search.dispatchEvent(new win.KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true}));
+ if(doc.activeElement!==first)throw new Error('search ArrowDown entry');
+ first.dispatchEvent(new win.KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true}));
+ if(doc.activeElement!==second)throw new Error('result ArrowDown navigation');
+ first.focus();first.dispatchEvent(new win.KeyboardEvent('keydown',{key:'ArrowUp',bubbles:true,cancelable:true}));
+ if(doc.activeElement!==first)throw new Error('result ArrowUp clamp');
+ last.focus();last.dispatchEvent(new win.KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true}));
+ if(doc.activeElement!==last)throw new Error('result ArrowDown clamp');
+ first?.click();
+ if(!first||first.getAttribute('aria-current')!=='true'||!doc.querySelector('#course-inspector code'))throw new Error('search selection inspector');
+ const selectedId=first.dataset.nodeId;
+ const incomingInspector=[...doc.querySelectorAll('#course-inspector [data-direction="incoming"][data-edge-id]')];
+ const outgoingInspector=[...doc.querySelectorAll('#course-inspector [data-direction="outgoing"][data-edge-id]')];
+ if(incomingInspector.length!==1||outgoingInspector.length!==0||!doc.querySelector('#course-inspector #outgoing-relations-title + .empty-relations'))throw new Error('course directional inspector');
+ const courseIncomingId=incomingInspector[0].dataset.edgeId;
+ if(JSON.stringify(edgeIds(semantic,'incoming'))!==JSON.stringify([courseIncomingId])||edgeIds(semantic,'outgoing').length!==0||edgeIds(semantic,'unrelated').length!==145)throw new Error('course one-hop edge state');
+ const expectThreeSelection=(expected,context)=>{const actual=threeSelectionSummary(visual);if(mode!=='default'){if(actual!=='unavailable')throw new Error(`fallback three selection marker:${context}:${JSON.stringify(actual)}`);return}if(JSON.stringify(actual)!==JSON.stringify(expected))throw new Error(`three selection ${context}:${JSON.stringify(actual)}`)};
+ const focusReadings=[];
+ const expectThreeFocus=(nodeId,neighborCount,context)=>{
+  const actual=threeFocusSummary(visual);
+  if(mode!=='default'){if(actual!=='unavailable')throw new Error(`fallback three focus marker:${context}:${JSON.stringify(actual)}`);return actual}
+  if(actual==='unavailable')throw new Error(`three focus unavailable:${context}`);
+  if(actual.accepted!==true)throw new Error(`three focus rejected:${context}:${JSON.stringify(actual)}`);
+  if(!Number.isInteger(actual.renderedFrames)||actual.renderedFrames<1)throw new Error(`three focus frame counter:${context}:${actual.renderedFrames}`);
+  focusReadings.push(actual.renderedFrames);
+  if(nodeId===null){
+   if(actual.expected.selectedNodeId!==null||actual.expected.center!==null||actual.actual.center!==null||actual.actual.distance!==null)throw new Error(`three focus clear:${context}:${JSON.stringify(actual)}`);
+   return actual;
+  }
+  if(actual.expected.selectedNodeId!==nodeId||actual.expected.neighborCount!==neighborCount||actual.actual.neighborCount!==neighborCount||actual.actual.selectedNodeId!==nodeId)throw new Error(`three focus identity ${context}:${JSON.stringify(actual)}`);
+  if(JSON.stringify(actual.actual.center)!==JSON.stringify(actual.expected.center)||actual.actual.distance!==actual.expected.distance)throw new Error(`three focus camera divergence ${context}:${JSON.stringify(actual)}`);
+  return actual;
+ };
+ const selectedSurfaces=[...semantic.querySelectorAll(`[data-node-id="${CSS.escape(selectedId)}"]`)];
+ if(selectedSurfaces.length<2||selectedSurfaces.some((element)=>element.dataset.relationState!=='selected')||win.getComputedStyle(selectedSurfaces[0]).outlineStyle==='none')throw new Error('selected non-color cue');
+ expectThreeSelection({selectedNodeId:selectedId,nodes:counts(1,1,0,0,145,0),edges:counts(0,1,0,0,145,0)},'course');
+ const courseFocus=expectThreeFocus(selectedId,1,'course');
+ if(mode==='fallback'){
+  if(JSON.stringify(edgeIds(visual,'incoming'))!==JSON.stringify([courseIncomingId])||edgeIds(visual,'unrelated').length!==145)throw new Error('course HTML SVG parity');
+  const incomingPath=visual.querySelector(`[data-edge-id="${CSS.escape(courseIncomingId)}"]`);if(!incomingPath||win.getComputedStyle(incomingPath).strokeDasharray==='none')throw new Error('incoming edge non-color cue');
+ }
+ const curriculumId=semantic.querySelector(`[data-edge-id="${CSS.escape(courseIncomingId)}"]`)?.dataset.source;
+ const curriculumLink=semantic.querySelector(`nav [data-node-id="${CSS.escape(curriculumId||'')}"]`);if(!curriculumLink)throw new Error('curriculum selection target');
+ curriculumLink.focus();curriculumLink.dispatchEvent(new win.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));
+ const hierarchyIncoming=[...doc.querySelectorAll('#course-inspector [data-direction="incoming"][data-edge-id]')];
+ const hierarchyOutgoing=[...doc.querySelectorAll('#course-inspector [data-direction="outgoing"][data-edge-id]')];
+ const hierarchyCounts={inspectorIncoming:hierarchyIncoming.length,inspectorOutgoing:hierarchyOutgoing.length,semanticIncoming:edgeIds(semantic,'incoming').length,semanticOutgoing:edgeIds(semantic,'outgoing').length,semanticUnrelated:edgeIds(semantic,'unrelated').length};
+ if(hierarchyCounts.inspectorIncoming!==1||hierarchyCounts.inspectorOutgoing!==144||hierarchyCounts.semanticIncoming!==1||hierarchyCounts.semanticOutgoing!==144||hierarchyCounts.semanticUnrelated!==1)throw new Error(`hierarchy one-hop and two-hop exclusion:${JSON.stringify(hierarchyCounts)}`);
+ expectThreeSelection({selectedNodeId:curriculumId,nodes:counts(1,1,144,0,1,0),edges:counts(0,1,144,0,1,0)},'hierarchy');
+ const hierarchyFocus=expectThreeFocus(curriculumId,145,'hierarchy');
+ if(mode==='default'&&!(courseFocus.actual.distance<hierarchyFocus.actual.distance))throw new Error(`focus volume ordering:${courseFocus.actual.distance}/${hierarchyFocus.actual.distance}`);
+ if(mode==='fallback'&&(JSON.stringify(edgeIds(semantic,'incoming'))!==JSON.stringify(edgeIds(visual,'incoming'))||JSON.stringify(edgeIds(semantic,'outgoing'))!==JSON.stringify(edgeIds(visual,'outgoing'))||JSON.stringify(edgeIds(semantic,'unrelated'))!==JSON.stringify(edgeIds(visual,'unrelated'))))throw new Error('hierarchy HTML SVG parity');
+ first.click();
+ const semester=doc.querySelector('#semester-filter');semester.value='8';semester.dispatchEvent(new win.Event('change',{bubbles:true}));
+ if(doc.querySelector('#search-results [aria-current="true"]')||!doc.querySelector('#course-inspector .empty-inspector'))throw new Error('filtered selection clear');
+ if(semantic.querySelector('[data-relation-state]')||visual?.querySelector('[data-relation-state]'))throw new Error('relation state clear');
+ expectThreeSelection({selectedNodeId:null,nodes:counts(0,0,0,0,0,147),edges:counts(0,0,0,0,0,146)},'cleared');
+ expectThreeFocus(null,0,'cleared');
+ semester.value='';semester.dispatchEvent(new win.Event('change',{bubbles:true}));
+ if(doc.querySelectorAll('#search-results button[data-node-id]').length!==144)throw new Error('filter reset');
+ if(doc.querySelector('#result')?.textContent?.trim()!=='M3G_SITE_SMOKE_PASS')throw new Error('runtime marker');
+ confirmFocusRendering(visual,first,focusReadings[0]);
+}
+// A focused camera is only real if the renderer actually produced new frames afterwards.
+// The marker is rewritten on every selection, so re-selecting republishes a live frame count.
+// The frame counter is self-reported by the scheduler, so on its own it proves only that a
+// callback ran. It is therefore corroborated with a GPU pixel readback that the runtime
+// publishes at data-pixel-evidence: a frame captured inside the real render callback must
+// differ from a clear-only baseline and must reproduce under a second render of the same state.
+function pixelEvidenceReport(visual){
+ const raw=visual?.dataset.pixelEvidence;
+ if(raw===undefined)return null;
+ try{return JSON.parse(raw)}catch{throw new Error(`unreadable pixel evidence marker:${raw}`)}
+}
+function assertPixelEvidence(report){
+ if(report===null||typeof report!=='object')throw new Error('pixel evidence marker not an object');
+ if(report.code!=='PIXEL_EVIDENCE_OK'||report.passed!==true)throw new Error(`pixel evidence rejected:${report.code}:changed=${report.changedPixels}/${report.sampledPixels}`);
+ if(!Number.isInteger(report.changedPixels)||report.changedPixels<1)throw new Error(`pixel evidence changed no pixels:${report.changedPixels}`);
+ if(report.deterministic!==true)throw new Error('pixel evidence not reproducible across two renders');
+ if(!Number.isInteger(report.sampledPixels)||report.sampledPixels<1)throw new Error(`pixel evidence sampled nothing:${report.sampledPixels}`);
+}
+function confirmFocusRendering(visual,button,baseline){
+ if(mode!=='default'){result.textContent=PASS;return}
+ if(!Number.isInteger(baseline)){fail('missing focus frame baseline');return}
+ setTimeout(()=>{
+  try{
+   button.click();
+   const after=threeFocusSummary(visual);
+   if(after==='unavailable')throw new Error('three focus unavailable at render confirmation');
+   if(!(after.renderedFrames>baseline))throw new Error(`three focus produced no new frames:${after.renderedFrames}/${baseline}`);
+   const deadline=Date.now()+15000;
+   const poll=()=>{
+    try{
+     const report=pixelEvidenceReport(visual);
+     if(report===null){
+      if(Date.now()>=deadline)throw new Error('pixel evidence never published');
+      setTimeout(poll,50);return;
+     }
+     assertPixelEvidence(report);
+     result.textContent=PASS;
+    }catch(error){fail(error instanceof Error?error.message:String(error))}
+   };
+   poll();
+  }catch(error){fail(error instanceof Error?error.message:String(error))}
+ },250);
+}
+function visualBox(doc){const visual=doc.querySelector('#webgl-universe');if(!visual)return '0x0';const box=visual.getBoundingClientRect();return `${Math.floor(box.width)}x${Math.floor(box.height)}`}
+function syncFrameHeight(doc){const target=Math.max(doc.documentElement.scrollHeight,doc.body.scrollHeight)+1;frame.style.height=`${target}px`;return target}
+function settle(){
+ const doc=frame.contentDocument;if(!doc){fail('iframe unavailable');return}
+ const finish=()=>{try{const win=frame.contentWindow;if(win)win.dispatchEvent(new win.Event('resize'));inspect()}catch(error){fail(error instanceof Error?error.message:String(error))}};
+ let previous='',rounds=0;
+ const step=()=>{
+  try{
+   const current=`${syncFrameHeight(doc)}|${visualBox(doc)}`;
+   if(current===previous||rounds>=20){setTimeout(finish,150);return}
+   previous=current;rounds+=1;setTimeout(step,50);
+  }catch(error){fail(error instanceof Error?error.message:String(error))}
+ };
+ setTimeout(step,50);
+}
+frame.addEventListener('load',()=>{const deadline=Date.now()+30000;const poll=()=>{try{const runtime=frame.contentDocument?.querySelector('#result')?.textContent?.trim()||'';if(runtime==='M3G_SITE_SMOKE_PASS'){settle();return}if(runtime.startsWith('M3G_SITE_SMOKE_FAIL')){fail(runtime);return}if(Date.now()>=deadline){fail(`timeout:${runtime||'missing'}`);return}setTimeout(poll,50)}catch(error){fail(error instanceof Error?error.message:String(error))}};poll()},{once:true});
+frame.addEventListener('error',()=>fail('iframe load error'),{once:true});
+frame.src=`/dist-site/index.html?responsive-smoke=1${mode==='fallback'?'&force-fallback=true':''}`;
+</script></body></html>

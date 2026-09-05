@@ -14,9 +14,9 @@ const allCases = [
   { id: 'm3d-dom', serveRoot: repositoryRoot, page: 'tests/real-browser-dom-smoke.html', pass: 'M3D_BROWSER_SMOKE_PASS', fail: 'M3D_BROWSER_SMOKE_FAIL', flags: ['--disable-gpu'] },
   { id: 'm3j-production-dom', serveRoot: repositoryRoot, page: 'tests/real-browser-production-dom-smoke.html', pass: 'M3J_PRODUCTION_DOM_SMOKE_PASS', fail: 'M3J_PRODUCTION_DOM_SMOKE_FAIL', flags: ['--disable-gpu'] },
   { id: 'm3f-three', serveRoot: repositoryRoot, page: 'tests/real-browser-three-smoke.html', pass: 'M3F_BROWSER_SMOKE_PASS', fail: 'M3F_BROWSER_SMOKE_FAIL', flags: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] },
-  { id: 'm3g-artifact', serveRoot: resolve(repositoryRoot, 'dist-site'), page: 'index.html', pass: 'M3G_SITE_SMOKE_PASS', fail: 'M3G_SITE_SMOKE_FAIL', flags: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] },
-  { id: 'm3i-selection-three', serveRoot: resolve(repositoryRoot, 'dist-site'), page: 'index.html?smoke=m3i', pass: 'M3I_SITE_SMOKE_PASS', fail: 'M3I_SITE_SMOKE_FAIL', flags: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] },
-  { id: 'm3i-selection-fallback', serveRoot: resolve(repositoryRoot, 'dist-site'), page: 'index.html?smoke=m3i&force-fallback=true', pass: 'M3I_SITE_SMOKE_PASS', fail: 'M3I_SITE_SMOKE_FAIL', flags: ['--disable-gpu'] }
+  { id: 'm3g-artifact', serveRoot: resolve(repositoryRoot, 'dist-site'), page: 'index.html', pass: 'M3G_SITE_SMOKE_PASS', fail: 'M3G_SITE_SMOKE_FAIL', flags: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--virtual-time-budget=10000'] },
+  { id: 'm3i-selection-three', serveRoot: resolve(repositoryRoot, 'dist-site'), page: 'index.html?smoke=m3i', pass: 'M3I_SITE_SMOKE_PASS', fail: 'M3I_SITE_SMOKE_FAIL', flags: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--virtual-time-budget=10000'] },
+  { id: 'm3i-selection-fallback', serveRoot: resolve(repositoryRoot, 'dist-site'), page: 'index.html?smoke=m3i&force-fallback=true', pass: 'M3I_SITE_SMOKE_PASS', fail: 'M3I_SITE_SMOKE_FAIL', flags: ['--disable-gpu', '--virtual-time-budget=10000'] }
 ];
 const selectedCase = process.env.BROWSER_SMOKE_CASE;
 const cases = selectedCase === undefined ? allCases : allCases.filter((testCase) => testCase.id === selectedCase);
