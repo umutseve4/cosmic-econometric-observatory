@@ -85,7 +85,7 @@
 - Canonical visual acceptance is `4/4`, responsive acceptance is `10/10`, and the bounded rubric result is `40/40`.
 - This closure does not claim camera controls, pointer picking, continuous rendering, broad cross-browser or assistive-technology conformance, production-scale performance, disposal-throw resilience, continuously current public provenance availability, or universal production readiness.
 
-### M3j — Product-first observatory slice (Implemented, pending merge)
+### M3j — Product-first observatory slice (Verified)
 - Replace the hard-coded 5-node/4-edge production demonstration in `site/app.js` with a deterministic artifact generated from the existing compiler by `scripts/generate-browser-artifact.mjs`. No second curriculum parser and no parallel graph model are introduced, and semantic identities are consumed unchanged.
 - `src/three-runtime.ts` owns a single `requestAnimationFrame` lifecycle behind a validated handle contract; `src/frame-scheduler.ts` makes the frame watchdog visibility-aware with an injected rather than hard-coded timeout.
 - `src/three-viewport-lifecycle.ts`, `src/three-focus-target.ts`, `src/three-selection-projection.ts` and `src/direct-relations.ts` add responsive resize/DPR handling, fit-to-graph/reset-view/bounded zoom, selection projection that does not bypass the validated selection contract, and deterministic direct-relation highlighting.
@@ -93,7 +93,16 @@
 - `src/pixel-evidence.ts` replaces counter-based render assertions with same-run drawing-buffer readback. Render causality, blank-frame difference and repeat determinism are load-bearing; the sentinel check is supporting only, because production uses `preserveDrawingBuffer: false`. No golden checksums are stored, since they drift across Chrome, ANGLE, SwiftShader, antialiasing and DPR.
 - The oracle has demonstrated it can fail: its first CI run rejected the build with `PIXEL_EVIDENCE_BUFFER_LENGTH:changed=0/59392`, where `59392 = 256 × 232` identified a responsive resize between arming and rendering. Corrected with a bounded re-arm rather than by tolerating mismatched buffer lengths.
 - Implemented across `29` files, `+3346`/`-345`, adding `7` source modules and `9` test files. CI `verify` succeeded at PR head `7c0c49d4625be80b0dc1428511fc6ad7cfb61814`, run `33924708005`.
-- Not yet merged to `main`, so no exact-merge verification SHA is claimed. Remaining before merge: visual evidence capture and a final review pass over `site/app.js`.
+- Implementation squash-merged as `ca58a2cd88841f443b904f4ff0a284736368a895` (PR #52), which also hardened `site/app.js` by escaping the closed-enum `relation.direction` before interpolation. Independent QA PASS with CRITICAL/HIGH/MEDIUM/LOW findings `0/0/1/2`.
+- That merge left the production acceptance gate red. It did not break the deployment: the site built and deployed correctly, but four separate constants elsewhere in the repository were still frozen against the pre-M3j prototype and rejected the correct deployment. Each was repaired as its own change, and each repair replaced a stale expectation with the true one rather than relaxing an assertion.
+  - `.github/workflows/pages.yml` asserted `13` artifact files against the real `21`. Fixed at `a03063d9e52d0817372489196607718f3356ca85` (PR #58) by deriving the bound from the generated manifest instead of re-pinning a literal, plus `set -o pipefail` and a manifest shape check.
+  - `scripts/verify-live-site.mjs` pinned the `12`-file payload against the real `20`. Fixed at `984c66ee2fa5cc5c40e1631cf1c2fb0eacf2ee48` (PR #59), which also derived the reported totals from the pin and added a pin-ordering assertion.
+  - The same verifier pinned a removed Turkish phrase and the prototype `5`-node/`4`-edge graph. Fixed at `8a5af1a9539fa05e0c05bc48fc90c9ed61e92611` (PR #60) by re-pinning to the real `147`/`146` graph and to three shipped phrases, one of which (`lisans programı`) exists in no static markup and can only be produced by the in-page localisation pass, so the assertion still proves the semantic universe rendered and was localised in production.
+  - `scripts/probe-public-provenance.mjs` kept its own copy of the same `12`-file payload. This slot was unreachable until the others were fixed, because `Public provenance continuity` only triggers on a successful `Pages` run on `main`. Fixed at `866d8cb48a125b538e4915df3687e99160bc3afa` (PR #61).
+- Verified at `866d8cb48a125b538e4915df3687e99160bc3afa`, the first commit since the M3j merge on which the entire chain is green: CI run `33971298580`, `verify` job `101320172083`, `0` annotations; Pages run `33971298641` with `build` job `101320172510`, `deploy` job `101320383705` and `verify-production` job `101320412707` all successful with `0` annotations; and `Public provenance continuity` run `33971411032`, `verify` job `101320473937`, successful with `0` annotations.
+- The `verify-production` and continuity jobs are not `continue-on-error`, run under `set -o pipefail`, and their verifiers exit non-zero on any failed assertion. Their success is therefore relied on as evidence that the ordered artifact, payload, browser-parity and provenance-continuity code paths completed. The archived log text was not retrievable through the available surface, so the individual marker lines are **not** claimed to have been read directly.
+- Graph totals are pinned to `147` nodes and `146` edges from `EXPECTED` in `scripts/generate-browser-artifact.mjs` and corroborated independently by `tests/real-browser-responsive-smoke.html` against the built site. Each count now has exactly one definition per file, because four separate copies of a stale count are what produced this defect class.
+- Issue #47 remains open: its final criterion requires a `schedule` or `workflow_dispatch` continuity run for the exact deployed SHA, and only a `workflow_run`-triggered success is evidenced here.
 
 ### Deferred M3 slices
 - Broad cross-browser and assistive-technology validation, production-scale performance, disposal-throw resilience, and continuous monitoring/revalidation of current public provenance availability remain deferred.
@@ -102,7 +111,7 @@
 ### M3 exit
 - WebGL/Three.js renderer, SVG/HTML parity and screen-reader traversal.
 - Semantic node/edge sets match across projections; fallback is fully usable.
-- Full M3 remains open until the deferred capabilities selected for the exit are explicitly implemented and verified; bounded M3i closure is not full-M3 certification, and unmerged M3j implementation is not verification.
+- Full M3 remains open until the deferred capabilities selected for the exit are explicitly implemented and verified; bounded M3i closure is not full-M3 certification, and verified M3j delivery is not full-M3 certification either.
 
 ## M4 — RASAT protocol
 - Allow-listed, schema-validated scene commands and evidence orchestration.
