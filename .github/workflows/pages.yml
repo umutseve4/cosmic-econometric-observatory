@@ -40,15 +40,23 @@ jobs:
         id: provenance
         shell: bash
         run: |
+          set -o pipefail
           manifest_sha256="$(sha256sum dist-site/deployment-provenance.json | cut -d ' ' -f 1)"
           artifact_files="$(find dist-site -type f | wc -l)"
-          test "$artifact_files" -eq 13
+          # Every payload file is recorded in the manifest, so the tree must hold
+          # exactly the manifest's own entries plus the manifest itself. Deriving
+          # the bound keeps this a hard fail-closed check against any unrecorded
+          # file while removing a constant that silently rots whenever a module is
+          # legitimately added to the site build.
+          manifest_entries="$(node -e 'const m=JSON.parse(require("node:fs").readFileSync("dist-site/deployment-provenance.json","utf8")); if(!Array.isArray(m.files)) throw new Error("PAGES_MANIFEST_SHAPE_DRIFT"); process.stdout.write(String(m.files.length));')"
+          expected_files="$((manifest_entries + 1))"
+          test "$artifact_files" -eq "$expected_files"
           echo "manifest_sha256=${manifest_sha256}" >> "$GITHUB_OUTPUT"
           {
             echo '### Pages artifact provenance'
             printf -- '- Source SHA: `%s`\n' "$GITHUB_SHA"
             printf -- '- Manifest SHA-256: `%s`\n' "$manifest_sha256"
-            printf -- '- Artifact files: `%s`\n' "$artifact_files"
+            printf -- '- Artifact files: `%s` (manifest entries `%s` + manifest)\n' "$artifact_files" "$manifest_entries"
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Read GitHub Pages configuration
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d
