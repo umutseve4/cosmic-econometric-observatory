@@ -4,18 +4,33 @@ import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import process from 'node:process';
 
+// The exact set of payload files production must serve, in the code-point order
+// scripts/build-site.mjs writes them. This is deliberately an independent pin
+// rather than something read back from the live manifest: the manifest is the
+// artefact under test, so it cannot also be the definition of what is correct.
+// Keep this list in step with the `copies` map and generated artifact in
+// scripts/build-site.mjs; the count and the reported totals below are derived
+// from it, so adding an entry here is the only edit a new payload file needs.
 const EXPECTED_PAYLOAD = Object.freeze([
-  'app.js', 'index.html', 'modules/browser-dom-adapter.js',
-  'modules/browser-fallback-orchestrator.js', 'modules/browser-node-selection.js',
-  'modules/browser-renderer.js', 'modules/browser-three-adapter.js',
-  'modules/canonical.js', 'modules/projections.js', 'styles.css',
-  'vendor/three.core.js', 'vendor/three.module.js'
+  'app.js', 'data/curriculum-observatory.json', 'index.html',
+  'modules/browser-dom-adapter.js', 'modules/browser-fallback-orchestrator.js',
+  'modules/browser-node-selection.js', 'modules/browser-renderer.js',
+  'modules/browser-three-adapter.js', 'modules/canonical.js',
+  'modules/direct-relations.js', 'modules/frame-scheduler.js',
+  'modules/pixel-evidence.js', 'modules/projections.js',
+  'modules/three-focus-target.js', 'modules/three-runtime.js',
+  'modules/three-selection-projection.js', 'modules/three-viewport-lifecycle.js',
+  'styles.css', 'vendor/three.core.js', 'vendor/three.module.js'
 ]);
 const SHA256 = /^[0-9a-f]{64}$/u;
 const GIT_SHA = /^[0-9a-f]{40}$/u;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const fail = (message) => { throw new Error(message); };
 const assert = (condition, message) => { if (!condition) fail(message); };
+
+// A misordered pin would surface as a confusing fileset mismatch against a
+// perfectly good deployment, so fail on the pin itself before testing the site.
+assert(EXPECTED_PAYLOAD.every((path, index) => index === 0 || EXPECTED_PAYLOAD[index - 1] < path), 'LIVE_VERIFY_EXPECTED_PAYLOAD_ORDER');
 
 function settings() {
   const rawUrl = process.env.SITE_URL;
@@ -74,7 +89,7 @@ function parseManifest(bytes, expectedSourceSha) {
   assert(manifest.schemaVersion === '1.0.0', 'LIVE_VERIFY_MANIFEST_SCHEMA');
   assert(manifest.sourceSha === expectedSourceSha, `LIVE_VERIFY_SOURCE_SHA:${manifest.sourceSha}`);
   assert(SHA256.test(manifest.lockfileSha256), 'LIVE_VERIFY_LOCKFILE_SHA');
-  assert(Array.isArray(manifest.files) && manifest.files.length === 12, 'LIVE_VERIFY_MANIFEST_FILE_COUNT');
+  assert(Array.isArray(manifest.files) && manifest.files.length === EXPECTED_PAYLOAD.length, `LIVE_VERIFY_MANIFEST_FILE_COUNT:${manifest.files?.length}:${EXPECTED_PAYLOAD.length}`);
   const paths = manifest.files.map((entry) => entry?.path);
   assert(paths.every(isSafeRelative), 'LIVE_VERIFY_MANIFEST_PATH');
   assert(new Set(paths).size === paths.length, 'LIVE_VERIFY_MANIFEST_DUPLICATE');
@@ -101,7 +116,8 @@ async function verifyArtifact(siteUrl, expectedSourceSha) {
       assert(digest === entry.sha256, `LIVE_VERIFY_PAYLOAD_DIGEST:${entry.path}:${digest}:${entry.sha256}`);
     });
   }
-  console.log(`Artifact PASS: source=${manifest.sourceSha}; files=13/13; payload=12/12`);
+  const payloadCount = EXPECTED_PAYLOAD.length;
+  console.log(`Artifact PASS: source=${manifest.sourceSha}; files=${payloadCount + 1}/${payloadCount + 1}; payload=${manifest.files.length}/${payloadCount}`);
 }
 
 class Cdp {
