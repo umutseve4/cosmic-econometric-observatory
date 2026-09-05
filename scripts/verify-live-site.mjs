@@ -30,6 +30,25 @@ const EXPECTED_PAYLOAD = Object.freeze([
 const EXPECTED_NODES = 147;
 const EXPECTED_EDGES = 146;
 
+// The compiler's census of contradictions it found in the source and refused to
+// repair, pinned here so production is held to the same count the build enforces
+// (`EXPECTED_CURRICULUM_ANOMALIES` in scripts/generate-browser-artifact.mjs) and
+// the browser refuses to render without (`loadArtifact` in site/app.js). The
+// partition is by identifier prefix, which is also the scope boundary: timetable
+// reconciliation anomalies are prefixed `offering-` and must never appear here.
+// `renderAnomalies` derives its kind, heading and navigation buttons and drops an
+// unresolvable reference silently, so a page that lost the section, published the
+// wrong partition or rendered dead controls would still look finished. These are
+// the assertions that make that visible in production rather than only in CI.
+const EXPECTED_ANOMALIES = 10;
+const EXPECTED_ANOMALY_PREFIXES = Object.freeze({ 'anomaly-curriculum-': 1, 'anomaly-duplicate-': 6, 'anomaly-typo-': 3 });
+// The `data-anomaly-kind` values site/app.js writes onto each rendered entry, keyed
+// by the identifier prefix it derives them from. Held as a pair so a rename on
+// either side fails loudly instead of quietly re-partitioning the section.
+const EXPECTED_ANOMALY_KINDS = Object.freeze({ ects: 1, duplicate: 6, typo: 3 });
+const ANOMALY_ARTIFACT_PATH = 'data/curriculum-observatory.json';
+const ANOMALY_OUT_OF_SCOPE_PREFIX = 'offering-';
+
 // Phrases that must be present in the live rendered page. `lisans programı` is
 // load-bearing: it exists in no static markup and can only be produced by the
 // in-page localisation pass rewriting the projected `program` semantic kind, so
@@ -49,6 +68,29 @@ const assert = (condition, message) => { if (!condition) fail(message); };
 // A misordered pin would surface as a confusing fileset mismatch against a
 // perfectly good deployment, so fail on the pin itself before testing the site.
 assert(EXPECTED_PAYLOAD.every((path, index) => index === 0 || EXPECTED_PAYLOAD[index - 1] < path), 'LIVE_VERIFY_EXPECTED_PAYLOAD_ORDER');
+// Same reasoning for the anomaly pins: a partition that does not add up to the
+// pinned total, or an artefact path that production never serves, is a defect in
+// this file and must not be reported as a defect in the deployment.
+assert(total(EXPECTED_ANOMALY_PREFIXES) === EXPECTED_ANOMALIES, `LIVE_VERIFY_EXPECTED_ANOMALY_PREFIX_TOTAL:${total(EXPECTED_ANOMALY_PREFIXES)}:${EXPECTED_ANOMALIES}`);
+assert(total(EXPECTED_ANOMALY_KINDS) === EXPECTED_ANOMALIES, `LIVE_VERIFY_EXPECTED_ANOMALY_KIND_TOTAL:${total(EXPECTED_ANOMALY_KINDS)}:${EXPECTED_ANOMALIES}`);
+assert(EXPECTED_PAYLOAD.includes(ANOMALY_ARTIFACT_PATH), `LIVE_VERIFY_EXPECTED_ANOMALY_ARTIFACT:${ANOMALY_ARTIFACT_PATH}`);
+
+function total(spec) { return Object.values(spec).reduce((sum, count) => sum + count, 0); }
+
+// Census strings rather than objects, so a mismatch prints both sides in one line.
+function census(values) {
+  const counts = new Map();
+  for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
+  return [...counts.entries()].sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0)).map(([key, count]) => `${key}=${count}`).join(',');
+}
+
+function expectedCensus(spec) {
+  return Object.keys(spec).sort().map((key) => `${key}=${spec[key]}`).join(',');
+}
+
+function anomalyPrefix(id) {
+  return Object.keys(EXPECTED_ANOMALY_PREFIXES).find((prefix) => id.startsWith(prefix)) ?? `unclassified:${id}`;
+}
 
 function settings() {
   const rawUrl = process.env.SITE_URL;
@@ -136,6 +178,35 @@ async function verifyArtifact(siteUrl, expectedSourceSha) {
   }
   const payloadCount = EXPECTED_PAYLOAD.length;
   console.log(`Artifact PASS: source=${manifest.sourceSha}; files=${payloadCount + 1}/${payloadCount + 1}; payload=${manifest.files.length}/${payloadCount}`);
+}
+
+// Reads the deployed artefact itself, not the page built from it, so a rendering
+// regression and a data regression fail with different messages. The digests were
+// already verified above, so this parses bytes production is known to be serving.
+async function verifyPublishedAnomalies(siteUrl) {
+  const anomalies = await retry('anomalies', 3, 2_000, async () => {
+    const { bytes } = await fetchBytes(childUrl(siteUrl, ANOMALY_ARTIFACT_PATH));
+    let artifact;
+    try { artifact = JSON.parse(bytes.toString('utf8')); } catch { fail('LIVE_VERIFY_ANOMALY_JSON'); }
+    assert(Array.isArray(artifact?.anomalies), 'LIVE_VERIFY_ANOMALY_FIELD');
+    return artifact.anomalies;
+  });
+  assert(anomalies.length === EXPECTED_ANOMALIES, `LIVE_VERIFY_ANOMALY_COUNT:${anomalies.length}:${EXPECTED_ANOMALIES}`);
+  const ids = anomalies.map((anomaly) => anomaly?.id);
+  assert(ids.every((id) => typeof id === 'string' && id.length > 0), 'LIVE_VERIFY_ANOMALY_ID');
+  assert(new Set(ids).size === ids.length, `LIVE_VERIFY_ANOMALY_DUPLICATE:${ids.join(',')}`);
+  assert(ids.every((id, index) => index === 0 || ids[index - 1] < id), `LIVE_VERIFY_ANOMALY_ORDER:${ids.join(',')}`);
+  const outOfScope = ids.filter((id) => id.startsWith(ANOMALY_OUT_OF_SCOPE_PREFIX));
+  assert(outOfScope.length === 0, `LIVE_VERIFY_ANOMALY_SCOPE:${outOfScope.join(',')}`);
+  const observed = census(ids.map(anomalyPrefix));
+  const expected = expectedCensus(EXPECTED_ANOMALY_PREFIXES);
+  assert(observed === expected, `LIVE_VERIFY_ANOMALY_PARTITION:${observed}:${expected}`);
+  for (const anomaly of anomalies) {
+    const filled = (value) => typeof value === 'string' && value.length > 0;
+    assert(filled(anomaly.code) && filled(anomaly.severity) && filled(anomaly.message), `LIVE_VERIFY_ANOMALY_RECORD:${anomaly.id}`);
+    assert(Array.isArray(anomaly.entityRefs) && anomaly.entityRefs.length > 0, `LIVE_VERIFY_ANOMALY_REFS:${anomaly.id}`);
+  }
+  console.log(`Anomaly PASS: published=${anomalies.length}/${EXPECTED_ANOMALIES}; partition=${observed}`);
 }
 
 class Cdp {
@@ -231,7 +302,7 @@ async function runBrowserCase(siteUrl, testCase, port) {
           const visual = document.querySelector('#webgl-universe');
           const html = document.querySelector('#html-universe');
           const ids = (root, attr) => [...root.querySelectorAll('[' + attr + ']')].map((el) => el.getAttribute(attr));
-          return resolve({ result, lang: document.documentElement.lang, title: document.title, bodyText: document.body.innerText, renderMode: visual?.dataset.renderMode || '', overflow: document.documentElement.scrollWidth - ${testCase.width}, htmlNodeIds: ids(html, 'data-node-id'), htmlEdgeIds: ids(html, 'data-edge-id'), visualNodeIds: ids(visual, 'data-node-id'), visualEdgeIds: ids(visual, 'data-edge-id'), canvasCount: visual?.querySelectorAll('canvas[aria-hidden="true"]').length || 0, svgCount: visual?.querySelectorAll('svg').length || 0 });
+          return resolve({ result, lang: document.documentElement.lang, title: document.title, bodyText: document.body.innerText, renderMode: visual?.dataset.renderMode || '', overflow: document.documentElement.scrollWidth - ${testCase.width}, htmlNodeIds: ids(html, 'data-node-id'), htmlEdgeIds: ids(html, 'data-edge-id'), visualNodeIds: ids(visual, 'data-node-id'), visualEdgeIds: ids(visual, 'data-edge-id'), canvasCount: visual?.querySelectorAll('canvas[aria-hidden="true"]').length || 0, svgCount: visual?.querySelectorAll('svg').length || 0, anomalyCount: Number(document.querySelector('#anomaly-list')?.dataset.anomalyCount || 0), anomalyKinds: [...document.querySelectorAll('#anomaly-list > li')].map((el) => el.dataset.anomalyKind || 'unclassified'), anomalyNavButtons: document.querySelectorAll('#anomaly-list button[data-anomaly-node-id]').length });
         }
         if (Date.now() >= deadline) return reject(new Error('RUNTIME_MARKER_TIMEOUT:' + result));
         setTimeout(read, 100);
@@ -249,7 +320,16 @@ async function runBrowserCase(siteUrl, testCase, port) {
     assert(unique(value.htmlNodeIds) === EXPECTED_NODES && unique(value.htmlEdgeIds) === EXPECTED_EDGES, `BROWSER_HTML_PARITY:${testCase.name}:nodes=${unique(value.htmlNodeIds)}/${EXPECTED_NODES}:edges=${unique(value.htmlEdgeIds)}/${EXPECTED_EDGES}`);
     if (testCase.expectedMode === 'fallback') assert(unique(value.visualNodeIds) === EXPECTED_NODES && unique(value.visualEdgeIds) === EXPECTED_EDGES && value.svgCount === 1, `BROWSER_FALLBACK_PARITY:${testCase.name}:nodes=${unique(value.visualNodeIds)}/${EXPECTED_NODES}:edges=${unique(value.visualEdgeIds)}/${EXPECTED_EDGES}:svg=${value.svgCount}`);
     else assert(value.canvasCount === 1, `BROWSER_THREE_ACCESSIBILITY:${testCase.name}`);
-    console.log(`Browser PASS: ${testCase.name}; ${testCase.width}x${testCase.height}; mode=${value.renderMode}; nodes=${unique(value.htmlNodeIds)}/${EXPECTED_NODES}; edges=${unique(value.htmlEdgeIds)}/${EXPECTED_EDGES}`);
+    // The section is derived, not static: an unrecognised identifier prefix inherits the
+    // wrong wording and an unresolvable entityRef is dropped without a button, neither of
+    // which throws. Asserting the rendered partition and one navigable control per entry
+    // is what separates "the page loaded" from "the contradictions actually reached it".
+    const observedKinds = census(value.anomalyKinds);
+    const expectedKinds = expectedCensus(EXPECTED_ANOMALY_KINDS);
+    assert(value.anomalyCount === EXPECTED_ANOMALIES && value.anomalyKinds.length === EXPECTED_ANOMALIES, `BROWSER_ANOMALY_COUNT:${testCase.name}:published=${value.anomalyCount}:rendered=${value.anomalyKinds.length}:${EXPECTED_ANOMALIES}`);
+    assert(observedKinds === expectedKinds, `BROWSER_ANOMALY_PARTITION:${testCase.name}:${observedKinds}:${expectedKinds}`);
+    assert(value.anomalyNavButtons >= EXPECTED_ANOMALIES, `BROWSER_ANOMALY_NAVIGATION:${testCase.name}:${value.anomalyNavButtons}:${EXPECTED_ANOMALIES}`);
+    console.log(`Browser PASS: ${testCase.name}; ${testCase.width}x${testCase.height}; mode=${value.renderMode}; nodes=${unique(value.htmlNodeIds)}/${EXPECTED_NODES}; edges=${unique(value.htmlEdgeIds)}/${EXPECTED_EDGES}; anomalies=${value.anomalyCount}/${EXPECTED_ANOMALIES} (${observedKinds}); anomalyButtons=${value.anomalyNavButtons}`);
   } finally {
     try { if (browser && targetId) await browser.call('Target.closeTarget', { targetId }); } catch { /* bounded browser shutdown follows */ }
     page?.close(); browser?.close(); await stopChrome(chrome);
@@ -273,6 +353,7 @@ try {
   const { siteUrl, expectedSourceSha } = settings();
   console.log(`Production verification target: ${siteUrl.href}`);
   await verifyArtifact(siteUrl, expectedSourceSha);
+  await verifyPublishedAnomalies(siteUrl);
   await verifyBrowser(siteUrl);
   console.log(`LIVE_PRODUCTION_VERIFY_PASS:${expectedSourceSha}`);
 } catch (error) {
