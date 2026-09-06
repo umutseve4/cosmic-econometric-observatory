@@ -1,12 +1,46 @@
-# Cosmic Econometric Observatory
+<h1 align="center">Cosmic Econometric Observatory</h1>
 
-A deterministic, provenance-first world engine that compiles versioned academic catalogs into a knowledge graph, renderer-neutral Scene IR, and accessible projections.
+<p align="center">
+  A university curriculum, rendered as a navigable graph —<br>
+  where every node can tell you <b>which source document it came from</b>.
+</p>
 
-This is a clean successor project. [`umutseve4/eko-rasathane`](https://github.com/umutseve4/eko-rasathane) remains an immutable legacy/reference repository; its application code and history are never imported or executed here.
+<p align="center">
+  <img src="https://img.shields.io/badge/curriculum%20relations-144-FF4D4F?style=flat-square" alt="144 curriculum relations">
+  <img src="https://img.shields.io/badge/source%20offerings-164-FF4D4F?style=flat-square" alt="164 source offerings">
+  <img src="https://img.shields.io/badge/three.js-0.185.1%20pinned-FF4D4F?style=flat-square" alt="three.js 0.185.1 pinned">
+</p>
 
-## Architecture
+<p align="center"><b><a href="https://umutseve4.github.io/cosmic-econometric-observatory/">▶ Open the observatory</a></b></p>
 
-`source snapshot → explicit assertions/anomalies → curriculum compiler → stable anchors/routes → domain graph → Scene IR → projections`
+---
+
+## What you see in 30 seconds
+
+The Bursa Uludağ University Econometrics programme — `144` curriculum relations
+compiled from a pinned source snapshot — laid out as a 3D graph. Search a course
+by code or title, select it, and its direct incoming and outgoing relations
+light up. The inspector panel shows semester, status, ECTS, elective pool and
+**provenance**: which snapshot the value came from. If a field was never
+recorded, it says so instead of inventing a number.
+
+Everything the canvas shows is also reachable without the canvas. The HTML and
+SVG surfaces expose the identical sorted node and edge identifiers, with visible
+focus, `Enter`/`Space` selection, `Escape` to clear, and keyboard-navigable
+search. `prefers-reduced-motion` is honoured. No information exists only in
+pixels.
+
+## The one rule everything follows
+
+```
+source snapshot → explicit assertions/anomalies → curriculum compiler
+  → stable anchors/routes → domain graph → Scene IR → projections
+```
+
+**Raw source values are never silently corrected.** When two catalogue pages
+disagree, the disagreement is recorded as an anomaly and carried forward — it is
+not averaged, guessed, or quietly dropped. Human-facing course codes are
+assignments, never identity.
 
 | Entity | Meaning | Must not contain |
 |---|---|---|
@@ -14,9 +48,40 @@ This is a clean successor project. [`umutseve4/eko-rasathane`](https://github.co
 | `CurriculumRelation` | A course's placement/status/credits in one curriculum version | section, instructor, schedule |
 | `Offering` | A time-bound delivery of a course | copied canonical title/credits |
 
-Human-facing course codes are assignments, never identity. Raw source values are never silently corrected. Every accepted or rejected assertion remains traceable to a content-addressed snapshot.
+This is a clean successor project. [`umutseve4/eko-rasathane`](https://github.com/umutseve4/eko-rasathane)
+remains an immutable legacy/reference repository; its application code and
+history are never imported or executed here.
 
-## M1 — Source-backed BUÜ snapshot
+## Verify
+
+Requires Node.js 22 or newer. The dependency graph is locked.
+
+```sh
+npm ci --ignore-scripts
+npm run verify
+npm run test:browser-smoke
+```
+
+The standard verification gate includes type checking, build, M0/M1/M2 domain
+tests, materializer safety tests, fixture integrity, environment determinism,
+legacy isolation, renderer regressions, and real-Chromium DOM/WebGL smoke tests.
+
+## What is deliberately not here
+
+Scraping, databases, user accounts, and LLM/RAG integration are not implemented.
+
+Full M3 remains open. Broad cross-browser and assistive-technology
+certification, production-scale performance, disposal-throw resilience, and
+continuously current public provenance availability are **not claimed**. The
+exact-merge Pages result is point-in-time evidence, not universal
+production-readiness certification.
+
+---
+
+# Engineering record
+
+<details>
+<summary><b>M1 — Source-backed BUÜ snapshot</b></summary>
 
 M1 pins the 2025–2026 BUÜ Economics curriculum and timetable at legacy commit `db8d52f0b29d712c34e8b7487e2299ce9f75c266`.
 
@@ -27,7 +92,10 @@ M1 pins the 2025–2026 BUÜ Economics curriculum and timetable at legacy commit
 - Duplicate codes, suspicious spellings, the `241` versus `240` ECTS conflict, and printed-code mismatches remain explicit anomalies.
 - Fixture lengths and SHA-256 values are checked against the committed manifest.
 
-## M2a — Deterministic curriculum graph core
+</details>
+
+<details>
+<summary><b>M2a — Deterministic curriculum graph core</b></summary>
 
 M2a compiles the source-backed institution, Econometrics program, 2025–2026 curriculum, and its curriculum courses into versioned artifacts.
 
@@ -42,7 +110,10 @@ M2a compiles the source-backed institution, Econometrics program, 2025–2026 cu
 
 See [`docs/adr/0002-m2a-curriculum-graph-core.md`](docs/adr/0002-m2a-curriculum-graph-core.md) for the exact boundary.
 
-## M3a — Semantic projection contract
+</details>
+
+<details>
+<summary><b>M3a — Semantic projection contract</b></summary>
 
 M3a establishes a renderer-neutral parity gate before browser rendering begins.
 
@@ -53,7 +124,10 @@ M3a establishes a renderer-neutral parity gate before browser rendering begins.
 - SVG nodes expose ordered list semantics, position-aware accessible labels and keyboard focus without an ancestor `img` role hiding descendants from the accessibility tree.
 - Duplicate node identifiers and invalid or duplicate focus orders fail closed before any projection is emitted.
 
-## M3b — Injected browser preparation/mount boundary
+</details>
+
+<details>
+<summary><b>M3b — Injected browser preparation/mount boundary</b></summary>
 
 M3b adds a dependency-free boundary between projection manifests and an injected browser host.
 
@@ -63,13 +137,19 @@ M3b adds a dependency-free boundary between projection manifests and an injected
 - If the injected target mutates and then throws, rollback is outside the adapter contract.
 - Port-produced root nodes remain a trusted-port boundary; their semantic metadata is runtime-validated.
 
-## M3c–M3e — Concrete parsing and trusted semantic parity
+</details>
+
+<details>
+<summary><b>M3c–M3e — Concrete parsing and trusted semantic parity</b></summary>
 
 - An allow-listed DOM adapter parses generated HTML/SVG into detached content and rejects active or unexpected structure before mount.
 - A real headless Chromium smoke covers parser behavior, hostile-label escaping, namespace correctness, semantic parity and exact mutation counts.
 - Manifest and prepared node/edge descriptors are independently reconstructed and compared before target mutation.
 
-## M3f — Bounded Three.js/WebGL vertical slice
+</details>
+
+<details>
+<summary><b>M3f — Bounded Three.js/WebGL vertical slice</b></summary>
 
 M3f adds an exact-pinned `three@0.185.1` adapter without claiming a production renderer.
 
@@ -79,7 +159,10 @@ M3f adds an exact-pinned `three@0.185.1` adapter without claiming a production r
 - The canvas is `aria-hidden="true"`; accessible semantics remain the responsibility of the equivalent HTML/SVG surfaces.
 - A real Chromium/SwiftShader smoke verifies `2` nodes, `1` edge, WebGL context health, `NO_ERROR`, forced-renderer rejection and `0` target mounts on preparation failure.
 
-## M3g–M3i — Bounded browser and production closure
+</details>
+
+<details>
+<summary><b>M3g–M3i — Bounded browser and production closure</b></summary>
 
 - The production browser bridge, deterministic fallback orchestration, bounded keyboard node selection, and responsive application shell are implemented and tested.
 - GitHub Pages build, deploy, exact-source artifact parity, and four canonical production-browser cases passed at exact merge SHA `a01ef2ef06fb820dc60c67a31beda1fb306a1bf0`.
@@ -87,7 +170,10 @@ M3f adds an exact-pinned `three@0.185.1` adapter without claiming a production r
 - Visual CI uses an intentional deterministic `system-fallback` font policy; issue #36 was closed by PR #45.
 - Repository-wide enumeration after that closure returned exactly `0` open issues.
 
-## M3j — Product-first observatory slice (implemented, pending merge)
+</details>
+
+<details>
+<summary><b>M3j — Product-first observatory slice (implemented, pending merge)</b></summary>
 
 M3j replaces the hard-coded 5-node/4-edge demonstration in `site/app.js` with the real compiled curriculum artifact and builds the observatory interaction layer on top of it. The compiler, provenance contracts, stable identities, Scene IR, fail-closed browser boundaries, and accessibility parity are unchanged.
 
@@ -98,29 +184,24 @@ M3j replaces the hard-coded 5-node/4-edge demonstration in `site/app.js` with th
 - Course search by code or title is case-insensitive with deterministic ordering. The node inspector displays only metadata and provenance actually present and shows an explicit unavailable state instead of inventing values.
 - The semantic HTML/SVG surface keeps full parity: visible focus, `Enter`/`Space` selection, `Escape` clear, keyboard-navigable search results, and no canvas-only information. `prefers-reduced-motion` is honored.
 
-### Pixel-level render evidence
+M3j is implemented and green in CI but is not yet merged to `main`, so it carries no exact-merge verification SHA. A transient `PIXEL_EVIDENCE_RENDER_TIMEOUT` may be publishable shortly after startup when the initial inspector reset arms the recorder without a following invalidation; each later arm clears the prior dataset and timer, but this has not been directly observed.
 
-The previous browser smoke asserted the runtime's own `renderedFrames` counter. That proves scheduling, not pixels — the counter increments while the canvas stays black. `src/pixel-evidence.ts` closes the gap by reading the drawing buffer back and comparing frames within a single run.
+</details>
+
+## Pixel-level render evidence
+
+The previous browser smoke asserted the runtime's own `renderedFrames` counter.
+That proves scheduling, not pixels — the counter increments while the canvas
+stays black. `src/pixel-evidence.ts` closes the gap by reading the drawing
+buffer back and comparing frames within a single run.
 
 - No golden checksums are stored. They drift across Chrome, ANGLE, SwiftShader, antialiasing and DPR, and the resulting flakiness trains reviewers to ignore the signal. Three same-run guarantees are load-bearing instead: render causality, blank-frame difference, and determinism across repeats.
 - Verdicts are ordered so the most specific failure wins: `CONTEXT_LOST`, `EMPTY_VIEWPORT`, `RENDER_TIMEOUT`, `NO_RENDER`, `BUFFER_LENGTH`, `READBACK_BLOCKED`, `SENTINEL_COLLISION`, `SENTINEL_INTACT`, `BLANK_FRAME`, `NONDETERMINISTIC`, `GL_ERROR`, then `PIXEL_EVIDENCE_OK`.
 - The sentinel check is supporting rather than load-bearing, because production uses `preserveDrawingBuffer: false` and the browser may discard the buffer after compositing.
-- This oracle has demonstrated that it can fail. Its first CI run rejected the build with `PIXEL_EVIDENCE_BUFFER_LENGTH:changed=0/59392`; `59392 = 256 × 232` showed that a responsive resize between arming and rendering had changed the drawing buffer, so baseline and frame described different geometries. It was corrected with a bounded re-arm, not by tolerating mismatched buffer lengths — that tolerance is the exact defect class the module exists to remove.
 
-M3j is implemented and green in CI but is not yet merged to `main`, so it carries no exact-merge verification SHA. A transient `PIXEL_EVIDENCE_RENDER_TIMEOUT` may be publishable shortly after startup when the initial inspector reset arms the recorder without a following invalidation; each later arm clears the prior dataset and timer, but this has not been directly observed.
-
-Full M3 remains open. Broad cross-browser and assistive-technology certification, production-scale performance, disposal-throw resilience, and continuously current public provenance availability are not claimed. The exact-merge Pages result is point-in-time evidence, not universal production-readiness certification.
-
-## Verify
-
-Requires Node.js 22 or newer. The dependency graph is locked.
-
-```sh
-npm ci --ignore-scripts
-npm run verify
-npm run test:browser-smoke
-```
-
-The standard verification gate includes type checking, build, M0/M1/M2 domain tests, materializer safety tests, fixture integrity, environment determinism, legacy isolation, renderer regressions, and real-Chromium DOM/WebGL smoke tests.
-
-Scraping, databases, user accounts, and LLM/RAG integration are not implemented.
+**This oracle has demonstrated that it can fail.** Its first CI run rejected the
+build with `PIXEL_EVIDENCE_BUFFER_LENGTH:changed=0/59392`; `59392 = 256 × 232`
+showed that a responsive resize between arming and rendering had changed the
+drawing buffer, so baseline and frame described different geometries. It was
+corrected with a bounded re-arm, not by tolerating mismatched buffer lengths —
+that tolerance is the exact defect class the module exists to remove.
