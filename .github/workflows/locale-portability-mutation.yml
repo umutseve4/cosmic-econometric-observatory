@@ -1,0 +1,87 @@
+name: locale portability mutation check
+
+# Issue #66 asks for more than a passing test: it asks for evidence that the
+# new assertion can fail. A portability gate that cannot go red is decoration.
+#
+# This workflow runs the gate three times on the same commit:
+#   1. clean tree, expect green,
+#   2. tree mutated so the artifact carries a local-time-dependent field,
+#      expect red, and expect the specific divergence message,
+#   3. mutation reverted, expect green again.
+#
+# It never commits anything. The mutation lives only in the runner's working
+# copy for the length of step 2.
+
+on:
+  push:
+    branches:
+      - "test/**"
+    paths:
+      - "tests/browser-artifact-portability.test.mjs"
+      - "tests/support/hostile-locale-build.mjs"
+      - "scripts/generate-browser-artifact.mjs"
+      - ".github/workflows/locale-portability-mutation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mutation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+
+      - name: The gate passes on the clean tree
+        run: node --test tests/browser-artifact-portability.test.mjs
+
+      - name: Introduce a local-time dependency
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("scripts/generate-browser-artifact.mjs")
+          source = path.read_text(encoding="utf-8")
+          anchor = "    schemaVersion: '1.0.0',\n"
+          hits = source.count(anchor)
+          if hits != 1:
+              raise SystemExit(f"MUTATION_ANCHOR_AMBIGUOUS:{hits}")
+          mutant = anchor + "    mutationCanary: new Date(0).toString(),\n"
+          path.write_text(source.replace(anchor, mutant), encoding="utf-8")
+          print("mutation applied")
+          PY
+          git --no-pager diff --stat
+
+      - name: The gate must reject the mutant
+        shell: bash
+        run: |
+          set +e
+          node --test tests/browser-artifact-portability.test.mjs > mutant.log 2>&1
+          status=$?
+          set -e
+          echo "exit status: ${status}"
+          tail -c 3000 mutant.log
+          if [ "${status}" -eq 0 ]; then
+            echo "::error title=mutation survived::a local-time dependent field did not fail the portability gate"
+            exit 1
+          fi
+          if ! grep -q 'HOSTILE_LOCALE_ARTIFACT_DIVERGED' mutant.log; then
+            echo "::error title=wrong failure::the run failed for some reason other than artifact divergence"
+            exit 1
+          fi
+          echo "the mutant was rejected by the intended assertion"
+
+      - name: Revert the mutation and confirm the tree is green again
+        shell: bash
+        run: |
+          git checkout -- scripts/generate-browser-artifact.mjs
+          git --no-pager diff --stat
+          node --test tests/browser-artifact-portability.test.mjs
