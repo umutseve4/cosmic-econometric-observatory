@@ -24,6 +24,10 @@ const HOSTILE = Object.freeze({
   LC_ALL: 'tr_TR.UTF-8'
 });
 
+// UTC+14 expressed the way `getTimezoneOffset` expresses it: minutes to add to
+// local time to reach UTC, so a positive zone is a negative number.
+const KIRITIMATI_OFFSET_NOW = -840;
+
 test('the artifact is byte-identical when built under a hostile locale and timezone', () => {
   const temporary = mkdtempSync(join(tmpdir(), 'cosmic-artifact-portability-'));
   try {
@@ -53,7 +57,11 @@ test('the artifact is byte-identical when built under a hostile locale and timez
     // success while measuring nothing.
     const observed = JSON.parse(child.stdout);
     assert.equal(observed.timeZone, HOSTILE.TZ, `HOSTILE_LOCALE_NOT_APPLIED:${child.stdout}`);
-    assert.equal(observed.offsetMinutesAtEpoch, -840, `HOSTILE_LOCALE_NOT_APPLIED:${child.stdout}`);
+    assert.equal(
+      observed.offsetMinutesNow,
+      KIRITIMATI_OFFSET_NOW,
+      `HOSTILE_LOCALE_NOT_APPLIED:${child.stdout}`
+    );
     assert.equal(
       observed.collatorLocale.startsWith('tr'),
       true,
