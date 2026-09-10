@@ -20,8 +20,14 @@ if (!repositoryRoot || !destination) {
 const observed = {
   timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   collatorLocale: new Intl.Collator().resolvedOptions().locale,
+  // The offset now is the one that matters: Kiritimati is UTC+14 today, which
+  // is -840 minutes. At the Unix epoch the same island was on UTC-10:40, so
+  // the epoch reading below is 640 and is reported only as context. Asserting
+  // on the epoch value would be asserting on 1970, not on the machine that
+  // builds the artifact.
+  offsetMinutesNow: new Date().getTimezoneOffset(),
   offsetMinutesAtEpoch: new Date(0).getTimezoneOffset(),
-  epochRenderedLocally: new Date(0).toString()
+  nowRenderedLocally: new Date().toString()
 };
 
 generateBrowserArtifact(repositoryRoot, destination);
