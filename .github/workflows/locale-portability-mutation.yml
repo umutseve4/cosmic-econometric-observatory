@@ -39,8 +39,22 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm run build
 
+      - name: Report the runner environment the baseline builds in
+        run: |
+          node -e "console.log(JSON.stringify({node: process.version, tz: Intl.DateTimeFormat().resolvedOptions().timeZone, locale: new Intl.Collator().resolvedOptions().locale, offset: new Date(0).getTimezoneOffset()}))"
+
       - name: The gate passes on the clean tree
-        run: node --test tests/browser-artifact-portability.test.mjs
+        shell: bash
+        run: |
+          set +e
+          node --test tests/browser-artifact-portability.test.mjs > clean.log 2>&1
+          status=$?
+          set -e
+          cat clean.log
+          if [ "${status}" -ne 0 ]; then
+            echo "::error title=clean gate red::$(tail -c 1500 clean.log | tr '\n' ' ')"
+            exit 1
+          fi
 
       - name: Introduce a local-time dependency
         shell: bash
@@ -74,7 +88,7 @@ jobs:
             exit 1
           fi
           if ! grep -q 'HOSTILE_LOCALE_ARTIFACT_DIVERGED' mutant.log; then
-            echo "::error title=wrong failure::the run failed for some reason other than artifact divergence"
+            echo "::error title=wrong failure::$(tail -c 1500 mutant.log | tr '\n' ' ')"
             exit 1
           fi
           echo "the mutant was rejected by the intended assertion"
